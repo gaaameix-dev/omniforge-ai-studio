@@ -43,6 +43,14 @@ const OMNI_I18N = {
     "plugins.title": "Plugins", "plugins.install": "Install package", "plugins.enable": "Enable",
     "plugins.disable": "Disable", "plugins.remove": "Remove", "plugins.trust": "trust",
     "a11y.skip": "Skip to content", "common.lite": "Lite mode",
+    "nav.workspace": "Workspace", "nav.builder": "Builder",
+    "ws.title": "Project workspace", "ws.files": "Files", "ws.upload": "Upload",
+    "ws.save": "Save", "ws.editor": "Editor", "ws.sandbox": "Sandbox", "ws.run": "Run code",
+    "ws.noproject": "pick a project", "ws.nofile": "pick a file", "ws.binary": "binary file - download only",
+    "b.title": "Workflow builder", "b.name": "Workflow name", "b.goal": "Goal template",
+    "b.task": "Task", "b.dept": "Department", "b.skill": "Skill", "b.deps": "Depends on",
+    "b.when": "Condition (param=value)", "b.add": "Add task", "b.save": "Save workflow",
+    "b.saved": "saved", "b.empty": "no tasks yet",
     "common.search": "Search", "common.lang": "हिन्दी"
   },
   hi: {
@@ -88,6 +96,14 @@ const OMNI_I18N = {
     "plugins.title": "प्लगइन", "plugins.install": "पैकेज इंस्टॉल करो", "plugins.enable": "चालू करो",
     "plugins.disable": "बंद करो", "plugins.remove": "हटाओ", "plugins.trust": "विश्वास",
     "a11y.skip": "मुख्य सामग्री पर जाओ", "common.lite": "लाइट मोड",
+    "nav.workspace": "वर्कस्पेस", "nav.builder": "बिल्डर",
+    "ws.title": "प्रोजेक्ट वर्कस्पेस", "ws.files": "फाइलें", "ws.upload": "अपलोड",
+    "ws.save": "सहेजो", "ws.editor": "एडिटर", "ws.sandbox": "सैंडबॉक्स", "ws.run": "कोड चलाओ",
+    "ws.noproject": "प्रोजेक्ट चुनो", "ws.nofile": "फाइल चुनो", "ws.binary": "बाइनरी फाइल - सिर्फ डाउनलोड",
+    "b.title": "वर्कफ़्लो बिल्डर", "b.name": "वर्कफ़्लो का नाम", "b.goal": "लक्ष्य टेम्पलेट",
+    "b.task": "टास्क", "b.dept": "विभाग", "b.skill": "स्किल", "b.deps": "निर्भर है",
+    "b.when": "शर्त (param=value)", "b.add": "टास्क जोड़ो", "b.save": "वर्कफ़्लो सहेजो",
+    "b.saved": "सहेजा गया", "b.empty": "अभी कोई टास्क नहीं",
     "common.search": "खोजो", "common.lang": "English"
   }
 };
