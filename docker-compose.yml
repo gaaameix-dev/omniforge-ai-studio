@@ -1,7 +1,7 @@
 services:
   omniforge:
     build: .
-    image: omniforge-ai-studio:0.6.0
+    image: omniforge-ai-studio:0.7.0
     ports:
       - "8000:8000"
     environment:
