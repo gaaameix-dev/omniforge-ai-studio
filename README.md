@@ -1,5 +1,10 @@
 # OmniForge AI Studio
 
+[![ci](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-264-brightgreen)](tests/)
+[![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](pyproject.toml)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 A working multi-agent platform: one master orchestrator turns a plain-language goal
 into a dependency-ordered plan, routes each task to a department agent with the
 matching skill, runs tasks in parallel, reviews every output, reworks weak ones,
@@ -32,6 +37,8 @@ goal ─► Master Orchestrator ─► plan (DAG) ─► route to agent ─► a
 ## Quickstart
 
 ```bash
+git clone https://github.com/gaaameix-dev/omniforge-ai-studio.git
+cd omniforge-ai-studio
 pip install -e ".[dev]"
 omniforge users --create you@example.com --password "a-good-password"   # optional
 omniforge doctor              # environment + integrations + smoke run
