@@ -1,7 +1,7 @@
 # OmniForge AI Studio
 
 [![ci](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-264-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-283-brightgreen)](tests/)
 [![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -46,7 +46,7 @@ omniforge eval                # 5 end-to-end eval cases
 omniforge demo                # two goals, printed plan by plan
 omniforge serve               # dashboard + API on http://127.0.0.1:8000
 omniforge run "Build a 2D mobile puzzle game with 20 levels and a leaderboard"
-pytest -q                     # 264 tests, ~67s
+pytest -q                     # 283 tests, ~77s
 ```
 
 Live model (any OpenAI-compatible endpoint: OpenAI, Azure, Groq, Together,
@@ -105,6 +105,15 @@ tool should.
 | Pause / stop | `/api/control/pause`, `/unpause`, `/stop`, `/clear` |
 | Conditions | a task may carry `when: {param, equals/in/not_equals/exists}`; failing tasks are dropped and dependents re-linked |
 | Load test | `omniforge loadtest --runs 20 --concurrency 4` reports p50/p95 and throughput |
+
+## Operations: alerts, Postgres mirror, workspace
+
+| Piece | How it works |
+|---|---|
+| Alert rules | metric + comparator + threshold + channel (email/webhook) + cooldown; evaluated when a run finishes. `omniforge alerts --create "spend,run_cost_usd,gt,1.0"` |
+| PostgreSQL mirror | `omniforge db --sync postgresql://…` copies runs, tasks, events, documents, usage, audit and tool calls into PostgreSQL for SQL reporting; verified against PostgreSQL 16 |
+| Workspace editor | dashboard Workspace view: upload, edit and save project files, then run Python in the sandbox |
+| Workflow builder | dashboard Builder view: compose tasks, departments, dependencies and conditions, then save as a reusable workflow |
 
 ## Models, cost and quotas
 
@@ -191,6 +200,8 @@ Mobile-first, zero build step, English/Hindi toggle, nine views:
 | `omniforge plugins [--install|--enable|--disable|--remove]` | plugin packages |
 | `omniforge vault [--rotate NEW_KEY]` | vault status or key rotation |
 | `omniforge loadtest --runs N --concurrency C` | latency and throughput report |
+| `omniforge db [--sync URL] [--verify URL]` | SQLite status, Postgres mirror, verification |
+| `omniforge alerts [--create ...] [--delete ID]` | alert rules |
 | `omniforge agents / skills / departments / info / demo` | inspect the framework |
 
 ## API
@@ -222,7 +233,11 @@ Auth off unless `OMNIFORGE_API_KEY` is set; then `/api/*` needs
 | GET/POST/DELETE | `/api/plugins[/install][/{id}/enable|disable]` | plugins |
 | GET/POST | `/api/moderation` · `/api/moderation/scan` | content policy |
 | GET/POST | `/api/projects/{id}/members` · `/api/projects/{id}/quota` | project ACL and quota |
-| GET | `/api/db` | database backend status |
+| GET | `/api/db` · POST `/api/db/sync` · GET `/api/db/verify` | backend status · mirror · verify |
+| GET/POST/DELETE | `/api/alert-rules` · POST `/api/alert-rules/evaluate` | threshold alerts |
+| GET/POST | `/api/sandbox` · `/api/sandbox/run` | sandbox status · run a snippet |
+| PATCH | `/api/files/{id}` | editor save |
+| GET/POST | `/api/plugins/registry` · `/api/plugins/registry/install` | registry index · install |
 | GET | `/api/knowledge/search?mode=semantic` | hybrid retrieval (needs an embedding key) |
 | GET/POST | `/api/runs/{id}/checkpoint` · `/resume` | checkpoint · crash recovery |
 | GET | `/api/health` · `/api/framework` · `/api/stats` | liveness · catalogues+policy · counters |
@@ -271,6 +286,7 @@ curl -s localhost:8000/api/runs -H 'content-type: application/json' \
 | `OMNIFORGE_ALERT_EMAIL` · `_ALERT_ON_FAILURE` | empty · `true` | failure alerts |
 | `OMNIFORGE_DB_URL` | empty (SQLite) | database backend |
 | `OMNIFORGE_PLUGIN_REQUIRE_SIGNATURE` | `false` | signed plugins only |
+| `OMNIFORGE_MODERATION_LLM` | `false` | add a model-based content classifier |
 | `ANTHROPIC_API_KEY` · `GEMINI_API_KEY` · `OMNIFORGE_LLM_PROVIDER` · `_LLM_FALLBACK` | empty · empty · `openai` · empty | providers |
 | `OMNIFORGE_RATE_LIMIT_PER_MINUTE` · `_BURST` · `_ALLOW_ANONYMOUS` | `240` · `60` · `false` | rate limits · guest reads |
 | `OMNIFORGE_API_KEY` · `_CORS_ORIGINS` | empty | single-key auth · CORS |
@@ -304,7 +320,8 @@ omniforge/
          metrics · store · knowledge · memory · message_bus · tasks · events
          guard (injection defence) · sandbox · integrations · auth · vault
          ratelimit · backup · mailer · mfa · scheduler · notifier · billing
-         plugins · portable · uploads · moderation · gateway
+         plugins · plugin_registry · portable · uploads · moderation · gateway
+         alerts · pgmirror · loadtest
   skills/ base · library (51) · handlers (9 deterministic)
   agents/ departments (10) · roles (120 + permissions)
   tools/  builtin · github · code · mcp (stdio + http)
@@ -314,7 +331,7 @@ omniforge/
           content_routes · platform_routes
   cli.py
 web/index.html           dashboard v3 (mobile-first)
-tests/                   264 tests
+tests/                   283 tests
 docs/ARCHITECTURE.md     layers, invariants, state machine, extension points
 docs/SECURITY.md         operator security checklist
 docs/TROUBLESHOOTING.md  setup and failure playbook
@@ -326,7 +343,7 @@ ROADMAP.md               item-by-item status for both production addenda
 ## Testing and evals
 
 ```bash
-pytest -q          # 264 tests
+pytest -q          # 283 tests
 omniforge eval     # 5 goal-level cases with explicit checks
 ruff check .       # lint
 ```
@@ -340,7 +357,9 @@ HTTP transports, the eval harness, identity/RBAC/sessions/API keys, the encrypte
 vault, rate limiting, checkpoints and resume, pause/emergency-stop, idempotency,
 priority scheduling, backup/verify/restore, password reset, MFA, mailer backends,
 project ACLs and quotas, failure alerts, conditional workflows, the load harness,
-embeddings and hybrid search, plugin install from URL, the Postgres schema seam,
+embeddings and hybrid search, plugin install from URL, the Postgres mirror against a
+real server, alert rules and cooldowns, the plugin registry index, the LLM classifier,
+the workspace editor and the workflow builder,
 the scheduler and webhook triggers, workflow replay and parameter substitution,
 notifier retries, uploads, portable export/import, agent scoring, memory, provenance,
 content policy, provider adapters and gateway failover, billing and quotas, plugin
