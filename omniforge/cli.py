@@ -357,6 +357,65 @@ def _cmd_users(args, settings: Settings) -> int:
     return 0
 
 
+def _cmd_db(args, settings: Settings) -> int:
+    from .core import pgmirror
+    from .core.pg import PostgresUnavailable
+
+    if args.sync:
+        store = RunStore(settings.db_path)
+        try:
+            result = pgmirror.sync(store, args.sync)
+        except PostgresUnavailable as exc:
+            print(f"cannot sync: {exc}")
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0
+    if args.verify:
+        try:
+            print(json.dumps(pgmirror.verify(args.verify), indent=2))
+        except PostgresUnavailable as exc:
+            print(f"cannot verify: {exc}")
+            return 2
+        return 0
+    store = RunStore(settings.db_path)
+    print(json.dumps({"active": "sqlite", "path": str(settings.db_path),
+                      "rows": store.stats()}, indent=2))
+    return 0
+
+
+def _cmd_alerts(args, settings: Settings) -> int:
+    from .core.alerts import AlertEngine
+    from .core.mailer import build_mailer
+
+    store = RunStore(settings.db_path)
+    engine = AlertEngine(store, settings, mailer=build_mailer(settings))
+    if args.create:
+        parts = args.create.split(",")
+        if len(parts) != 4:
+            print("use: --create 'name,metric,comparator,threshold'")
+            return 2
+        try:
+            rule = engine.create(name=parts[0], metric=parts[1], comparator=parts[2],
+                                 threshold=float(parts[3]))
+        except ValueError as exc:
+            print(f"invalid rule: {exc}")
+            return 2
+        print(f"created {rule['id']}: {rule['metric']} {rule['comparator']} {rule['threshold']}")
+        return 0
+    if args.delete:
+        print({"deleted": engine.delete(args.delete)})
+        return 0
+    rules = engine.rules()
+    if not rules:
+        print("no alert rules")
+        return 0
+    for rule in rules:
+        state = "on " if rule["enabled"] else "off"
+        print(f"  {rule['id']}  {state}  {rule['metric']} {rule['comparator']} "
+              f"{rule['threshold']}  -> {rule['channel']}  ({rule['name']})")
+    return 0
+
+
 def _cmd_loadtest(args, settings: Settings) -> int:
     from .core.loadtest import run_load
 
@@ -521,6 +580,14 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("metrics", help="storage counters as JSON")
 
+    p_db = sub.add_parser("db", help="database status, Postgres mirror or verify")
+    p_db.add_argument("--sync", metavar="POSTGRES_URL", help="mirror SQLite into PostgreSQL")
+    p_db.add_argument("--verify", metavar="POSTGRES_URL", help="check a PostgreSQL mirror")
+
+    p_alerts = sub.add_parser("alerts", help="list, create or delete alert rules")
+    p_alerts.add_argument("--create", metavar="NAME,METRIC,COMPARATOR,THRESHOLD")
+    p_alerts.add_argument("--delete", metavar="RULE_ID")
+
     p_load = sub.add_parser("loadtest", help="run N goals at a given concurrency")
     p_load.add_argument("--runs", type=int, default=5)
     p_load.add_argument("--concurrency", type=int, default=3)
@@ -577,6 +644,8 @@ def main(argv: list[str] | None = None) -> int:
         "history": lambda: _cmd_history(args, settings),
         "kb": lambda: _cmd_kb(args, settings),
         "metrics": lambda: _cmd_metrics(args, settings),
+        "db": lambda: _cmd_db(args, settings),
+        "alerts": lambda: _cmd_alerts(args, settings),
         "loadtest": lambda: _cmd_loadtest(args, settings),
         "vault": lambda: _cmd_vault(args, settings),
         "plugins": lambda: _cmd_plugins(args, settings),
