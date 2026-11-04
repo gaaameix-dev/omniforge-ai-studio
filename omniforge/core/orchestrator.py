@@ -23,7 +23,7 @@ from .llm import BaseLLM, heuristic_plan
 from .memory import ArtifactStore, Blackboard
 from .message_bus import MessageBus
 from .metrics import Metrics
-from .moderation import Policy
+from .moderation import LlmModerator, Policy
 from .moderation import scan as moderation_scan
 from .registry import AgentRegistry, SkillRegistry, ToolRegistry
 from .retry import RetryPolicy, call_with_retry
@@ -52,6 +52,7 @@ class Orchestrator:
         notifier: Any | None = None,
         billing: Any | None = None,
         mailer: Any | None = None,
+        alerts: Any | None = None,
     ) -> None:
         self.settings = settings
         self.llm = llm
@@ -70,6 +71,10 @@ class Orchestrator:
         self.notifier = notifier
         self.billing = billing
         self.mailer = mailer
+        self.alerts = alerts
+        self.llm_moderator = LlmModerator(
+            llm, enabled=bool(getattr(settings, "moderation_llm", False))
+        )
         self.policy = Policy(
             enabled=settings.moderation_enabled,
             blocked_terms=tuple(getattr(settings, "moderation_blocked_terms", ()) or ()),
@@ -111,7 +116,7 @@ class Orchestrator:
     def describe(self) -> dict[str, Any]:
         return {
             "framework": "OmniForge AI Studio",
-            "version": "0.6.0",
+            "version": "0.7.0",
             "backend": self.llm.name,
             "live_mode": self.settings.live_mode,
             "departments": [
@@ -152,7 +157,7 @@ class Orchestrator:
     ) -> Run:
         if not goal or not goal.strip():
             raise ValueError("goal must not be empty")
-        self._check_policy(goal)
+        await self._check_policy_async(goal)
         if self._stopped:
             raise RuntimeError("execution is stopped (emergency stop); clear it before submitting")
         if idempotency_key:
@@ -194,7 +199,7 @@ class Orchestrator:
         workspace_id: str | None = None,
     ) -> Run:
         """Start a run from an existing plan (workflow replay) instead of planning."""
-        self._check_policy(goal)
+        await self._check_policy_async(goal)
         if self._stopped:
             raise RuntimeError("execution is stopped (emergency stop); clear it before submitting")
         plan = Plan.from_dict(plan_data)
@@ -798,6 +803,15 @@ class Orchestrator:
             parts.append("## Relevant work from earlier runs\n" + past)
         return "\n\n".join(p for p in parts if p)
 
+    async def _check_policy_async(self, text: str) -> None:
+        self._check_policy(text)
+        verdict = await self.llm_moderator.check(text)
+        if verdict.get("block"):
+            raise ValueError(
+                "goal blocked by the content classifier "
+                f"({', '.join(verdict['categories']) or 'policy'})"
+            )
+
     def _check_policy(self, text: str) -> None:
         report = moderation_scan(text, self.policy)
         if report.blocked:
@@ -996,6 +1010,15 @@ class Orchestrator:
         self._index_knowledge(run, done)
         self._save(run)
         await self._alert(run)
+        if self.alerts is not None:
+            try:
+                fired = await self.alerts.evaluate(run)
+                if fired:
+                    self.metrics.inc("alerts.fired", len(fired))
+                    await self.bus.emit("alerts.fired", run_id=run.id,
+                                        payload={"alerts": fired})
+            except Exception as exc:  # noqa: BLE001 - alerts must not break a run
+                log.warning("alert evaluation failed: %s", exc)
         await self._notify_run(run)
         await self.bus.emit(
             "run.finished", run_id=run.id,
