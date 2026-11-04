@@ -2,7 +2,7 @@
 
 Legend
 - **Implemented** — code exists and runs.
-- **Tested** — covered by the automated suite (`pytest -q`, 283 tests).
+- **Tested** — covered by the automated suite (`pytest -q`, 328 tests).
 - **Connected** — wired to a real external service *in this checkout*. "Needs key"
   means the code path is real but there is no credential here, so it reports
   `not_configured` instead of pretending to work.
@@ -141,6 +141,16 @@ and `GET /api/integrations` report the same truth at runtime.
 | LLM content classifier | Yes | Yes | Needs key | off by default |
 | Workspace editor + sandbox run | Yes | Yes | Yes | dashboard view |
 | Workflow builder (form) | Yes | Yes | Yes | dashboard view |
+
+## Verification
+
+| Check | Result |
+|---|---|
+| Tests | 328 |
+| Line coverage | 83% |
+| Endpoints documented vs implemented | 62 / 62 |
+| i18n keys (en/hi) | 126 / 126 |
+| Eval suite | 5/5 |
 
 ## Surface
 
