@@ -53,7 +53,7 @@ class Metrics:
 
     def prometheus(self) -> str:
         lines = ["# HELP omniforge_info Framework build info", "# TYPE omniforge_info gauge",
-                 'omniforge_info{version="0.6.0"} 1']
+                 'omniforge_info{version="0.7.0"} 1']
         for name, value in sorted(self.counters.items()):
             metric = f"omniforge_{name.replace('.', '_')}_total"
             lines.append(f"# TYPE {metric} counter")
