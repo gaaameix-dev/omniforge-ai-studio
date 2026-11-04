@@ -81,3 +81,39 @@ def scan(text: str, policy: Policy | None = None) -> ModerationReport:
 
 def contains_blocked(text: str, policy: Policy | None = None) -> bool:
     return scan(text, policy).blocked
+
+
+CLASSIFIER_SYSTEM = (
+    "You are a content policy classifier. Judge the text against these categories: "
+    "harassment, hate, sexual, violence, self_harm, illegal, malware, private_data, "
+    "none. Reply with JSON only: {\"categories\": [..], \"block\": true|false, "
+    "\"reason\": \"short\"}. Block only clear violations."
+)
+
+BLOCKING_CATEGORIES = {"harassment", "hate", "sexual", "violence", "self_harm",
+                       "illegal", "malware", "private_data"}
+
+
+class LlmModerator:
+    """Optional model-based classifier. Fails open: if the model errors, the
+    heuristic policy still applies and the call is reported as unchecked."""
+
+    def __init__(self, llm, *, enabled: bool = False) -> None:
+        self.llm = llm
+        self.enabled = enabled and llm is not None and getattr(llm, "name", "") != "mock"
+
+    async def check(self, text: str) -> dict:
+        if not self.enabled:
+            return {"checked": False, "block": False, "categories": [], "reason": "disabled"}
+        from .llm import parse_json_object
+
+        try:
+            response = await self.llm.complete(CLASSIFIER_SYSTEM, text[:6000], json_mode=True)
+        except Exception as exc:  # noqa: BLE001 - never fail a run over moderation
+            return {"checked": False, "block": False, "categories": [],
+                    "reason": f"classifier unavailable: {type(exc).__name__}"}
+        data = parse_json_object(response.text) or {}
+        categories = [str(c).lower() for c in (data.get("categories") or [])]
+        block = bool(data.get("block")) or any(c in BLOCKING_CATEGORIES for c in categories)
+        return {"checked": True, "block": block, "categories": categories,
+                "reason": str(data.get("reason") or "")[:200]}
