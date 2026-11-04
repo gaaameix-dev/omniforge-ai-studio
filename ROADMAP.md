@@ -6,7 +6,7 @@ credential is missing, the line says so.
 
 Legend: **I** implemented · **T** tested · **C** connected here · **P** partial · **N** pending
 
-Counts at this build: 283 automated tests · 51 shipped skills · 120 agent roles ·
+Counts at this build: 328 automated tests · 83% line coverage · 51 shipped skills · 120 agent roles ·
 15 built-in tools · 10 departments · 11 dashboard views.
 
 ---
@@ -58,6 +58,18 @@ Everything below was previously PENDING or PARTIAL and is now working and tested
 | Privacy and terms templates | I | `docs/PRIVACY.md`, `docs/TERMS.md` |
 
 ---
+
+## Verification status (audit)
+
+| Check | Result |
+|---|---|
+| Test suite | 328 tests, ~2m40s, 1 skipped only when the Postgres driver is absent |
+| Line coverage | 83% overall (`coverage run --source=omniforge -m pytest`) |
+| Untested areas that remain | live OpenAI/Anthropic/Gemini calls (mocked in tests), SMTP delivery (mocked), a real MCP server, provider-side rate limits |
+| CLI | 22 subprocess smoke tests; line coverage not measured because it runs out-of-process |
+| Docs vs code | 62 endpoints named in README, all present in the app (136 routes registered) |
+| i18n | 126 keys in both English and Hindi, no gaps |
+| Doctor / eval | `doctor` healthy, `eval` 5/5 |
 
 ## A. Identity and workspace management
 
