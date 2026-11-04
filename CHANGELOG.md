@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.1 - audit pass
+
+Added
+- `tests/test_paths.py`: live adapters (OpenAI-compatible, Anthropic, Gemini), SMTP
+  delivery, the LLM critique branch of the reviewer, every deterministic skill
+  handler, vault-without-cryptography, PostgreSQL failure messages and integration
+  error paths.
+- `tests/test_cli.py`: 22 subprocess smoke tests covering every read-only CLI
+  command plus run/history/replay, users, backup/verify, alerts and eval.
+
+Fixed
+- Nothing functional; this release closes verification gaps found by a coverage audit.
+
+Numbers
+- Tests: 283 -> 328 (1 skipped when the Postgres driver is absent).
+- Line coverage: 82% -> 83% overall; the remaining uncovered lines are live-provider
+  paths, SMTP, and the CLI (exercised out-of-process, so not measured).
+
 ## 0.7.0
 
 Added
