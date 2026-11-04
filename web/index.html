@@ -1,0 +1,1143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0e14" />
+<title>OmniForge AI Studio</title>
+<style>
+  :root{
+    --bg:#0a0e14;--panel:#111823;--panel2:#161f2d;--line:#22303f;--line2:#1a2534;
+    --text:#e7eef7;--muted:#8ba0b8;--accent:#4f9cf9;--ok:#35c88a;--warn:#f5b942;
+    --bad:#f2686b;--idle:#5b7089;--purple:#a78bfa;--nav-h:56px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  .skip{position:absolute;left:-9999px;top:0;background:var(--accent);color:#04101f;padding:8px 12px;
+        z-index:100;border-radius:0 0 8px 0;font-weight:700}
+  .skip:focus{left:0}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important;
+        scroll-behavior:auto!important}}
+  body.lite *{transition:none!important;animation:none!important;box-shadow:none!important}
+  body.lite #log,body.lite .scroll{max-height:220px}
+  html,body{margin:0;padding:0}
+  body{background:radial-gradient(900px 500px at 15% -10%,#12203a 0%,var(--bg) 60%);
+       color:var(--text);font:14px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+       padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom))}
+  header{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);
+         background:rgba(10,14,20,.9);backdrop-filter:blur(8px);position:sticky;top:0;z-index:20}
+  header h1{font-size:14px;margin:0;letter-spacing:.3px;white-space:nowrap}
+  header h1 small{color:var(--muted);font-weight:400;margin-left:6px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 9px var(--ok);flex:0 0 auto}
+  .badge{font-size:10.5px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;
+         color:var(--muted);background:var(--panel);white-space:nowrap}
+  .badge.live{color:var(--ok);border-color:#1f5a41}.badge.mock{color:var(--warn);border-color:#6b5220}
+  .badge.bad{color:var(--bad);border-color:#6b2a2c}
+  .hstats{margin-left:auto;display:none;gap:6px}
+  @media(min-width:720px){.hstats{display:flex}}
+  nav{position:fixed;bottom:0;left:0;right:0;z-index:30;display:flex;overflow-x:auto;
+      background:rgba(13,19,27,.97);border-top:1px solid var(--line);backdrop-filter:blur(10px);
+      padding-bottom:env(safe-area-inset-bottom);scrollbar-width:none}
+  nav::-webkit-scrollbar{display:none}
+  nav button{flex:1 0 auto;min-width:74px;height:var(--nav-h);background:none;border:0;color:var(--muted);
+             font:inherit;font-size:11px;display:flex;flex-direction:column;align-items:center;
+             justify-content:center;gap:2px;cursor:pointer;padding:0 6px}
+  nav button.on{color:var(--accent);border-top:2px solid var(--accent)}
+  nav button i{font-style:normal;font-size:15px;line-height:1}
+  @media(min-width:720px){
+    nav{position:sticky;top:52px;bottom:auto;border-top:0;border-bottom:1px solid var(--line);
+        padding:0 10px;justify-content:flex-start}
+    nav button{flex:0 0 auto;height:44px;flex-direction:row;gap:7px;font-size:12.5px;border-top:0;
+               border-bottom:2px solid transparent}
+    nav button.on{border-top:0;border-bottom:2px solid var(--accent)}
+    body{padding-bottom:24px}
+  }
+  main{padding:12px;max-width:1500px;margin:0 auto}
+  .view{display:none}.view.on{display:block}
+  .grid{display:grid;gap:12px}
+  @media(min-width:900px){.grid.two{grid-template-columns:minmax(0,1fr) 340px}
+    .grid.chat{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .panel h2{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);
+            margin:0 0 9px;font-weight:700;display:flex;justify-content:space-between;
+            align-items:center;gap:8px}
+  textarea,input[type=text],select{width:100%;background:var(--panel2);color:var(--text);
+      border:1px solid var(--line);border-radius:9px;padding:10px;font:inherit;outline:none;font-size:16px}
+  @media(min-width:720px){textarea,input[type=text],select{font-size:14px}}
+  textarea{min-height:86px;resize:vertical}
+  textarea:focus,input:focus,select:focus{border-color:var(--accent)}
+  button{background:var(--accent);color:#04101f;border:0;border-radius:9px;padding:10px 14px;
+         font:inherit;font-weight:700;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  button.ghost{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:500}
+  button.tiny{font-size:11px;padding:5px 10px;border-radius:7px}
+  button.ok{background:var(--ok);color:#04140d}
+  button.no{background:transparent;border:1px solid var(--bad);color:var(--bad)}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  label.check{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12.5px;margin:10px 0}
+  .tasks{display:grid;gap:8px}
+  .task{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--idle);
+        border-radius:9px;padding:10px 12px;cursor:pointer}
+  .task .trow{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .task .title{font-weight:600;font-size:13px}
+  .task .meta{color:var(--muted);font-size:11px;margin-top:2px}
+  .task .result{display:none;white-space:pre-wrap;color:#c9d7e7;font-size:12px;max-height:220px;
+                overflow:auto;border-top:1px dashed var(--line);padding-top:8px;margin-top:8px}
+  .task.open .result{display:block}
+  .status{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;
+          border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .s-done{border-left-color:var(--ok)}.s-done .status{color:var(--ok);border-color:#1f5a41}
+  .s-running{border-left-color:var(--accent)}.s-running .status{color:var(--accent);border-color:#1d4a7d}
+  .s-failed{border-left-color:var(--bad)}.s-failed .status{color:var(--bad);border-color:#6b2a2c}
+  .s-awaiting_approval{border-left-color:var(--warn)}
+  .s-awaiting_approval .status{color:var(--warn);border-color:#6b5220}
+  .s-skipped{opacity:.55}
+  .score{font-size:10px;color:var(--purple);border:1px solid #40356b;border-radius:999px;padding:1px 6px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px}
+  .kv span:nth-child(odd){color:var(--muted)}
+  .kv span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}
+  .item{padding:8px 9px;border:1px solid var(--line2);border-radius:9px;margin-bottom:6px;
+        background:var(--panel2);font-size:12.5px}
+  .item .g{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .m{color:var(--muted);font-size:11px;display:flex;gap:8px;flex-wrap:wrap;margin-top:3px}
+  .item.click{cursor:pointer}.item.click:hover{border-color:var(--accent)}
+  #log{height:190px;overflow:auto;font:11px/1.6 ui-monospace,Menlo,monospace;color:var(--muted)}
+  #log div{border-bottom:1px solid #141d29;padding:1px 0}
+  #log b{color:#cfdcec;font-weight:600}
+  #summary{white-space:pre-wrap;font-size:12.5px;color:#cfdced;max-height:240px;overflow:auto}
+  .muted{color:var(--muted);font-size:12px}
+  .empty{color:var(--muted);font-size:12.5px;padding:6px 0}
+  .chip{font-size:10.5px;border:1px solid var(--line);border-radius:999px;padding:1px 7px;color:var(--muted)}
+  .chip.ok{color:var(--ok);border-color:#1f5a41}.chip.bad{color:var(--bad);border-color:#6b2a2c}
+  .chip.warn{color:var(--warn);border-color:#6b5220}
+  .table{width:100%;border-collapse:collapse;font-size:12px}
+  .table th{text-align:left;color:var(--muted);font-weight:600;font-size:10.5px;text-transform:uppercase;
+            letter-spacing:.06em;padding:6px 8px;border-bottom:1px solid var(--line)}
+  .table td{padding:7px 8px;border-bottom:1px solid var(--line2);vertical-align:top}
+  .scroll{max-height:420px;overflow:auto}
+  .deptcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
+  .deptcard b{font-size:13px;display:block;margin-bottom:2px;text-transform:capitalize}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 14px);
+         background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:9px 14px;
+         border-radius:9px;font-size:12.5px;z-index:60;display:none;max-width:90vw}
+  @media(min-width:720px){.toast{bottom:20px}}
+</style>
+</head>
+<body>
+<a href="#main" class="skip" data-i18n="a11y.skip">Skip to content</a>
+<header>
+  <span class="dot"></span>
+  <h1>OmniForge <small id="ver">v0.3</small></h1>
+  <span class="badge" id="backend">-</span>
+  <div class="hstats">
+    <span class="badge" id="s-agents">-</span>
+    <span class="badge" id="s-skills">-</span>
+    <span class="badge" id="s-runs">-</span>
+    <span class="badge" id="s-tokens">-</span>
+  </div>
+  <button class="ghost tiny" id="langtoggle" onclick="omniToggleLang()">हिन्दी</button>
+  <button class="ghost tiny" id="litetoggle" title="Lite mode">⚡</button>
+  <button class="ghost tiny" id="logout" style="display:none">⎋</button>
+</header>
+
+<nav id="nav" role="navigation" aria-label="Sections">
+  <button data-v="chat" class="on"><i>◈</i>Chat</button>
+  <button data-v="projects"><i>▣</i><span data-i18n="nav.projects">Projects</span></button>
+  <button data-v="departments"><i>▤</i><span data-i18n="nav.departments">Departments</span></button>
+  <button data-v="agents"><i>◉</i><span data-i18n="nav.agents">Agents</span></button>
+  <button data-v="skills"><i>✦</i><span data-i18n="nav.skills">Skills</span></button>
+  <button data-v="tools"><i>⚙</i><span data-i18n="nav.tools">Tools</span></button>
+  <button data-v="automation"><i>⚡</i><span data-i18n="nav.automation">Automation</span></button>
+  <button data-v="monitor"><i>◐</i><span data-i18n="nav.monitor">Monitor</span></button>
+  <button data-v="usage"><i>₹</i><span data-i18n="nav.usage">Usage</span></button>
+  <button data-v="security"><i>⛨</i><span data-i18n="nav.security">Security</span></button>
+  <button data-v="logs"><i>≡</i><span data-i18n="nav.logs">Logs</span></button>
+</nav>
+
+<main id="main" role="main">
+  <!-- ============================ CHAT ============================ -->
+  <section class="view on" id="v-chat">
+    <div class="grid chat">
+      <div>
+        <div class="panel">
+          <h2><span data-i18n="chat.new">New instruction</span> <span class="muted" id="orch-status">orchestrator idle</span></h2>
+          <textarea id="goal" data-i18n-ph="chat.ph" placeholder="Mere liye ek 3D open-world Android game banao / build a mobile puzzle game with 20 levels"></textarea>
+          <div class="row" style="margin-top:8px">
+            <select id="project" style="max-width:200px"><option value="" data-i18n="chat.noproject">no project</option></select>
+            <label class="check" style="margin:0"><input type="checkbox" id="auto" checked /> <span data-i18n="chat.auto">auto-approve</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="destructive" /> <span data-i18n="chat.destructive">allow destructive tools</span></label>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <button id="submit" data-i18n="chat.submit">Plan &amp; execute</button>
+            <button class="ghost tiny" id="replay" data-i18n="chat.replay">Replay</button>
+            <button class="ghost tiny" id="cancel" data-i18n="chat.cancel">Cancel</button>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:12px">
+          <h2><span data-i18n="chat.tasks">Task board</span> <span class="muted" id="run-id"></span></h2>
+          <div class="tasks" id="tasks"><div class="empty">No run yet. Send an instruction above.</div></div>
+        </div>
+
+        <div class="panel" style="margin-top:12px">
+          <h2 data-i18n="chat.summary">Handoff summary</h2>
+          <div id="summary" class="muted">Written by the orchestrator when a run finishes.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h2><span data-i18n="chat.run">Run</span> <span class="status" id="run-status">idle</span></h2>
+          <div class="kv" id="budget"><span>tokens</span><span>-</span><span>cost</span><span>-</span>
+            <span>tasks</span><span>-</span><span>delegated</span><span>-</span></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2><span data-i18n="chat.approvals">Approvals</span> <span class="muted" id="appr-count"></span></h2>
+          <div id="approvals"><div class="empty">nothing waiting</div></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2 data-i18n="chat.files">Project files</h2>
+          <div id="artifacts"><div class="empty">none yet</div></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2 data-i18n="chat.events">Live events</h2>
+          <div id="log"><div class="empty">waiting for a run…</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================== PROJECTS ========================== -->
+  <section class="view" id="v-projects">
+    <div class="grid two">
+      <div class="panel">
+        <h2 data-i18n="proj.runs">Runs</h2>
+        <div class="scroll" id="runlist"><div class="empty">no runs yet</div></div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2 data-i18n="proj.new">New project</h2>
+          <input type="text" id="pname" data-i18n-ph="proj.name" placeholder="Project name" />
+          <div class="row" style="margin-top:8px"><button id="pcreate" data-i18n="proj.create">Create project</button></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2 data-i18n="proj.list">Projects</h2>
+          <div class="scroll" id="projects"><div class="empty">no projects yet</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================== DEPARTMENTS ======================== -->
+  <section class="view" id="v-departments">
+    <div class="panel"><h2 data-i18n="dept.title">10 departments</h2><div class="grid" id="deptgrid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))"></div></div>
+  </section>
+
+  <!-- =========================== AGENTS =========================== -->
+  <section class="view" id="v-agents">
+    <div class="panel">
+      <h2><span data-i18n="agents.title">Agent directory</span> <span class="muted" id="agent-count"></span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <input type="text" id="agent-q" data-i18n-ph="agents.search" placeholder="search roles…" style="max-width:260px" />
+        <select id="agent-dept" style="max-width:220px"><option value="" data-i18n="agents.all">all departments</option></select>
+      </div>
+      <div class="scroll" id="agentlist"><div class="empty">loading…</div></div>
+    </div>
+  </section>
+
+  <!-- =========================== SKILLS =========================== -->
+  <section class="view" id="v-skills">
+    <div class="panel">
+      <h2><span data-i18n="skills.title">Skill library</span> <span class="muted" id="skill-count"></span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <select id="skill-dept" style="max-width:220px"><option value="">all departments</option></select>
+      </div>
+      <div class="scroll" id="skilllist"><div class="empty">loading…</div></div>
+    </div>
+  </section>
+
+  <!-- ============================ TOOLS =========================== -->
+  <section class="view" id="v-tools">
+    <div class="grid two">
+      <div class="panel">
+        <h2 data-i18n="tools.title">Tool registry</h2>
+        <div class="scroll"><table class="table" id="tooltable">
+          <thead><tr><th>Tool</th><th>Permissions</th><th>Kind</th></tr></thead>
+          <tbody><tr><td colspan="3" class="empty">loading…</td></tr></tbody>
+        </table></div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2><span data-i18n="tools.integrations">Integrations</span> <button class="ghost tiny" id="verifyall" data-i18n="tools.verifyall">Verify all</button></h2>
+          <div id="integrations"><div class="empty">loading…</div></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2 data-i18n="tools.policies">Policies</h2>
+          <div class="kv" id="policies"><span>-</span><span>-</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= AUTOMATION ========================= -->
+  <section class="view" id="v-automation">
+    <div class="grid two">
+      <div>
+        <div class="panel">
+          <h2><span data-i18n="auto.workflows">Workflows</span>
+            <span class="muted" id="wf-count"></span></h2>
+          <div class="scroll" id="wf-list"><div class="empty" data-i18n="auto.none">nothing yet</div></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2><span data-i18n="auto.schedules">Schedules</span></h2>
+          <div class="row" style="margin-bottom:10px">
+            <input type="text" id="sch-name" data-i18n-ph="auto.schedname" placeholder="Schedule name" style="max-width:170px" />
+            <input type="text" id="sch-goal" data-i18n-ph="auto.goal" placeholder="goal" style="max-width:220px" />
+            <input type="text" id="sch-every" value="3600" style="max-width:90px" aria-label="seconds" />
+            <button class="tiny" id="sch-create" data-i18n="auto.create">Create</button>
+          </div>
+          <div class="scroll" id="sch-list"><div class="empty" data-i18n="auto.none">nothing yet</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2><span data-i18n="auto.hooks">Webhooks</span></h2>
+          <div class="scroll" id="hook-list"><div class="empty" data-i18n="auto.none">nothing yet</div></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2><span data-i18n="plugins.title">Plugins</span>
+            <label class="ghost tiny" style="cursor:pointer;border:1px solid var(--line);border-radius:7px;padding:5px 10px">
+              <span data-i18n="plugins.install">Install package</span>
+              <input type="file" id="plugin-file" accept=".zip" style="display:none" />
+            </label></h2>
+          <div class="scroll" id="plugin-list"><div class="empty" data-i18n="auto.none">nothing yet</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================== USAGE =========================== -->
+  <section class="view" id="v-usage">
+    <div class="grid two">
+      <div>
+        <div class="panel">
+          <h2><span data-i18n="usage.title">Usage and cost</span> <span class="muted" id="usage-period"></span></h2>
+          <div class="kv" id="usage-totals"><span>-</span><span>-</span></div>
+          <div style="margin-top:10px" id="usage-models"></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2><span data-i18n="usage.estimate">Estimate a run</span></h2>
+          <div class="row">
+            <input type="text" id="est-goal" placeholder="goal" style="max-width:260px" />
+            <button class="tiny" id="est-btn" data-i18n="usage.estimate_btn">Estimate</button>
+          </div>
+          <div class="kv" id="est-out" style="margin-top:8px"><span>-</span><span>-</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 data-i18n="usage.note">prices are per 1M tokens</h2>
+        <div class="scroll"><table class="table" id="price-table">
+          <thead><tr><th>model</th><th>in</th><th>out</th></tr></thead>
+          <tbody><tr><td colspan="3" class="empty">-</td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================== MONITOR ========================== -->
+  <section class="view" id="v-monitor">
+    <div class="grid two">
+      <div>
+        <div class="panel">
+          <h2><span data-i18n="mon.control">Execution control</span> <span class="status" id="ctl-status">running</span></h2>
+          <div class="row">
+            <button class="tiny" id="ctl-pause" data-i18n="mon.pause">Pause</button>
+            <button class="ghost tiny" id="ctl-resume" data-i18n="mon.resume">Resume</button>
+            <button class="no tiny" id="ctl-stop" data-i18n="mon.stop">Emergency stop</button>
+            <button class="ghost tiny" id="ctl-clear" data-i18n="mon.clear">Clear stop</button>
+          </div>
+          <div class="kv" id="ctl-detail" style="margin-top:10px"><span>-</span><span>-</span></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2 data-i18n="mon.agents">Agents</h2>
+          <div class="kv" id="mon-agents"><span>-</span><span>-</span></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2 data-i18n="mon.timings">Timings</h2>
+          <div class="kv" id="mon-timings"><span>-</span><span>-</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2 data-i18n="mon.tasks">Tasks</h2>
+          <div class="kv" id="mon-tasks"><span>-</span><span>-</span></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2 data-i18n="mon.toolcalls">Tool calls</h2>
+          <div id="mon-tools"><div class="empty">-</div></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2 data-i18n="mon.health">Integration health</h2>
+          <div id="mon-health"><div class="empty">-</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= SECURITY ========================= -->
+  <section class="view" id="v-security">
+    <div class="grid two">
+      <div>
+        <div class="panel">
+          <h2><span data-i18n="sec.vault">Secrets vault</span> <span class="chip" id="vault-state">-</span></h2>
+          <div class="row">
+            <input type="text" id="sec-name" data-i18n-ph="sec.secretname" placeholder="name" style="max-width:180px" />
+            <input type="text" id="sec-value" data-i18n-ph="sec.secretvalue" placeholder="value" style="max-width:220px" />
+            <button class="tiny" id="sec-add" data-i18n="sec.addsecret">Store secret</button>
+          </div>
+          <div id="secret-list" style="margin-top:10px"><div class="empty">-</div></div>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2><span data-i18n="sec.keys">API keys</span>
+            <button class="ghost tiny" id="key-create" data-i18n="sec.createkey">Create key</button></h2>
+          <div id="key-list"><div class="empty">-</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 data-i18n="sec.audit">Audit log</h2>
+        <div class="scroll" id="audit-list"><div class="empty">-</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ LOGS ============================ -->
+  <section class="view" id="v-logs">
+    <div class="grid two">
+      <div class="panel"><h2 data-i18n="logs.events">Event log</h2><div id="log2" style="max-height:520px;overflow:auto;font:11px/1.7 ui-monospace,Menlo,monospace;color:var(--muted)"><div class="empty">no events</div></div></div>
+      <div class="panel"><h2 data-i18n="logs.toolcalls">Tool calls</h2><div id="toolcalls"><div class="empty">no tool calls yet</div></div></div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<div id="auth" style="display:none;position:fixed;inset:0;z-index:80;background:rgba(6,10,16,.94);
+     backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px">
+  <div class="panel" style="width:100%;max-width:380px">
+    <h2><span data-i18n="auth.needed">Sign in to use OmniForge</span></h2>
+    <div class="row" style="margin-bottom:10px">
+      <button class="tiny" id="tab-login">Login</button>
+      <button class="ghost tiny" id="tab-register" data-i18n="auth.register">Create account</button>
+    </div>
+    <input type="text" id="au-email" data-i18n-ph="auth.email" placeholder="Email" autocomplete="username" />
+    <input type="password" id="au-pass" data-i18n-ph="auth.password" placeholder="Password (8+ characters)"
+           autocomplete="current-password" style="margin-top:8px" />
+    <input type="text" id="au-name" data-i18n-ph="auth.name" placeholder="Name" style="margin-top:8px;display:none" />
+    <div class="row" style="margin-top:10px">
+      <button id="au-submit" data-i18n="auth.login">Sign in</button>
+      <span class="muted" id="au-error"></span>
+    </div>
+  </div>
+</div>
+
+<script src="/i18n.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const TOKEN_KEY = "omniforge_token";
+let currentRun = null, socket = null, framework = null, runsCache = [];
+
+function token(){ return localStorage.getItem(TOKEN_KEY) || ""; }
+function toast(msg, ms = 2600){
+  const t = $("toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(t._h); t._h = setTimeout(() => { t.style.display = "none"; }, ms);
+}
+function esc(s){ return (s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmt(n){ return Number(n||0).toLocaleString("en-IN"); }
+
+let authEnabled = false, identity = null;
+
+async function api(path, opts = {}){
+  const headers = Object.assign({"Content-Type":"application/json"}, opts.headers || {});
+  if (token()) headers["Authorization"] = "Bearer " + token();
+  const res = await fetch(path, Object.assign({}, opts, {headers}));
+  if (res.status === 401){
+    if (authEnabled){ showAuth(); }
+    throw new Error("unauthorized");
+  }
+  if (res.status === 403){
+    throw new Error("forbidden: your role cannot do this");
+  }
+  if (!res.ok) throw new Error((await res.text()) || res.statusText);
+  return res.json();
+}
+
+/* ---------------------------------------------------------------- auth */
+function showAuth(){ $("auth").style.display = "flex"; }
+function hideAuth(){ $("auth").style.display = "none"; }
+
+async function loadMe(){
+  try{
+    const res = await fetch("/api/auth/me", {headers: token() ? {"Authorization": "Bearer " + token()} : {}});
+    if (res.status === 401){ authEnabled = true; showAuth(); return null; }
+    const data = await res.json();
+    authEnabled = !!data.auth_enabled;
+    identity = data.identity;
+    if (authEnabled && !identity){ showAuth(); return null; }
+    if (identity && identity.email){
+      const btn = $("logout"); btn.style.display = ""; btn.textContent = "⎋ " + identity.role;
+      btn.onclick = async () => {
+        try { await api("/api/auth/logout", {method:"POST"}); } catch (e) { /* token may be an API key */ }
+        localStorage.removeItem(TOKEN_KEY); location.reload();
+      };
+    }
+    return data;
+  }catch(e){ return null; }
+}
+
+let authMode = "login";
+$("tab-login").onclick = () => {
+  authMode = "login";
+  $("tab-login").className = "tiny"; $("tab-register").className = "ghost tiny";
+  $("au-name").style.display = "none"; $("au-submit").textContent = omniT("auth.login");
+};
+$("tab-register").onclick = () => {
+  authMode = "register";
+  $("tab-register").className = "tiny"; $("tab-login").className = "ghost tiny";
+  $("au-name").style.display = ""; $("au-submit").textContent = omniT("auth.register");
+};
+$("au-submit").onclick = async () => {
+  const email = $("au-email").value.trim(), password = $("au-pass").value;
+  const path = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
+  const body = authMode === "login" ? {email, password}
+    : {email, password, name: $("au-name").value.trim() || email.split("@")[0]};
+  try{
+    const res = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"},
+                                   body: JSON.stringify(body)});
+    const data = await res.json();
+    if (!res.ok){ $("au-error").textContent = data.detail || "failed"; return; }
+    localStorage.setItem(TOKEN_KEY, data.token);
+    $("au-error").textContent = ""; hideAuth(); location.reload();
+  }catch(e){ $("au-error").textContent = e.message; }
+};
+
+/* ------------------------------------------------------------- monitor */
+async function loadMonitor(){
+  try{
+    const m = await api("/api/monitor");
+    const ctl = m.control || {};
+    $("ctl-status").textContent = ctl.stopped ? "stopped" : (ctl.paused ? "paused" : "running");
+    $("ctl-status").style.color = ctl.stopped ? "var(--bad)" : (ctl.paused ? "var(--warn)" : "var(--ok)");
+    $("ctl-detail").innerHTML = [
+      ["active runs", ctl.active_runs ?? 0], ["pending approvals", ctl.pending_approvals ?? 0],
+      ["paused", ctl.paused ? "yes" : "no"], ["stopped", ctl.stopped ? "yes" : "no"]
+    ].map(([k,v]) => `<span>${esc(k)}</span><span>${esc(String(v))}</span>`).join("");
+
+    const a = m.agents || {};
+    $("mon-agents").innerHTML = [["total", a.total ?? 0], ["busy", a.busy ?? 0],
+      ["idle", a.idle ?? 0]].map(([k,v]) => `<span>${k}</span><span>${v}</span>`).join("");
+
+    const t = m.tasks || {};
+    $("mon-tasks").innerHTML = (Object.keys(t).length ? Object.entries(t) : [["none", 0]])
+      .map(([k,v]) => `<span>${esc(k)}</span><span>${v}</span>`).join("");
+
+    const tim = (m.timings || {}).run || {};
+    const rev = (m.timings || {})["review.score"] || {};
+    $("mon-timings").innerHTML = [
+      ["run p50", (tim.p50 ?? 0) + "s"], ["run p95", (tim.p95 ?? 0) + "s"],
+      ["runs measured", tim.count ?? 0], ["avg review", rev.avg ?? 0]
+    ].map(([k,v]) => `<span>${esc(k)}</span><span>${esc(String(v))}</span>`).join("");
+
+    const tc = m.tool_calls || {};
+    $("mon-tools").innerHTML = `<div class="kv"><span>total</span><span>${tc.total ?? 0}</span>
+      <span>failed</span><span>${tc.failed ?? 0}</span></div>` +
+      ((tc.recent_failures || []).map(f => `<div class="item"><span class="g">${esc(f.tool)}
+        <span class="chip bad">failed</span></span><div class="m"><span>${esc(f.error || "")}</span></div></div>`).join("")
+       || '<div class="empty">no failures</div>');
+
+    $("mon-health").innerHTML = (m.integrations || []).map(i => {
+      const cls = i.status === "connected" ? "ok" : (i.status === "error" ? "bad" : "");
+      return `<div class="item"><span class="g">${esc(i.key)} <span class="chip ${cls}">${esc(i.status)}</span></span></div>`;
+    }).join("") || '<div class="empty">none</div>';
+  }catch(e){ toast(e.message); }
+}
+
+async function control(action){
+  try{
+    await api("/api/control/" + action, {method:"POST"});
+    toast(action + " ok"); loadMonitor();
+  }catch(e){ toast(e.message); }
+}
+$("ctl-pause").onclick = () => control("pause");
+$("ctl-resume").onclick = () => control("unpause");
+$("ctl-stop").onclick = () => control("stop");
+$("ctl-clear").onclick = () => control("clear");
+
+/* ------------------------------------------------------------ security */
+async function loadSecurity(){
+  try{
+    const s = await api("/api/secrets");
+    $("vault-state").textContent = s.vault.backend;
+    $("vault-state").className = "chip " + (s.vault.available ? "ok" : "bad");
+    $("secret-list").innerHTML = s.secrets.length ? s.secrets.map(x =>
+      `<div class="item"><span class="g">${esc(x.name)}</span>
+        <div class="m"><span>${esc((x.updated_at||"").slice(0,16))}</span>
+        <button class="ghost tiny" onclick="deleteSecret('${esc(x.name)}')">delete</button></div></div>`).join("")
+      : '<div class="empty">no secrets stored</div>';
+  }catch(e){ $("secret-list").innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+
+  try{
+    const keys = await api("/api/keys");
+    $("key-list").innerHTML = keys.length ? keys.map(k =>
+      `<div class="item"><span class="g">${esc(k.name)} <span class="chip">${esc(k.prefix)}…</span></span>
+        <div class="m"><span>${esc((k.created_at||"").slice(0,16))}</span>
+        <span>${k.revoked ? "revoked" : "active"}</span>
+        ${k.revoked ? "" : `<button class="ghost tiny" onclick="revokeKey('${k.id}')">revoke</button>`}</div></div>`).join("")
+      : '<div class="empty">no keys</div>';
+  }catch(e){ $("key-list").innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+
+  try{
+    const audit = await api("/api/audit?limit=60");
+    $("audit-list").innerHTML = audit.length ? audit.map(a =>
+      `<div class="item"><span class="g">${esc(a.action)} <span class="chip">${esc(a.actor || "-")}</span></span>
+        <div class="m"><span>${esc((a.ts||"").slice(0,19))}</span><span>${esc(a.target || "")}</span>
+        <span>${esc(a.detail || "")}</span></div></div>`).join("")
+      : '<div class="empty">no audit entries</div>';
+  }catch(e){ $("audit-list").innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+$("sec-add").onclick = async () => {
+  const name = $("sec-name").value.trim(), value = $("sec-value").value;
+  if (!name || !value) return toast("name and value required");
+  try{
+    await api("/api/secrets", {method:"POST", body: JSON.stringify({name, value})});
+    $("sec-name").value = ""; $("sec-value").value = "";
+    toast("secret stored"); loadSecurity();
+  }catch(e){ toast(e.message); }
+};
+
+async function deleteSecret(name){
+  try{ await api("/api/secrets/" + encodeURIComponent(name), {method:"DELETE"}); toast("deleted"); loadSecurity(); }
+  catch(e){ toast(e.message); }
+}
+
+$("key-create").onclick = async () => {
+  try{
+    const res = await api("/api/keys", {method:"POST", body: JSON.stringify({name:"dashboard"})});
+    prompt("Copy this API key now - it is shown once:", res.key);
+    loadSecurity();
+  }catch(e){ toast(e.message); }
+};
+
+async function revokeKey(id){
+  try{ await api("/api/keys/" + id, {method:"DELETE"}); toast("revoked"); loadSecurity(); }
+  catch(e){ toast(e.message); }
+}
+
+/* ---------------------------------------------------------------- nav */
+document.querySelectorAll("#nav button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b === btn));
+    document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + btn.dataset.v));
+    if (btn.dataset.v === "logs") loadLogs();
+    if (btn.dataset.v === "agents") loadAgents();
+    if (btn.dataset.v === "skills") loadSkills();
+    if (btn.dataset.v === "tools") loadTools();
+    if (btn.dataset.v === "projects") loadProjects();
+    if (btn.dataset.v === "monitor") loadMonitor();
+    if (btn.dataset.v === "security") loadSecurity();
+    if (btn.dataset.v === "automation") loadAutomation();
+    if (btn.dataset.v === "usage") loadUsage();
+    window.scrollTo({top:0, behavior:"smooth"});
+  };
+});
+
+/* ------------------------------------------------------------ framework */
+async function loadFramework(){
+  framework = await api("/api/framework");
+  $("ver").textContent = "v" + framework.version;
+  const be = $("backend");
+  be.textContent = framework.backend + (framework.live_mode ? " · live" : " · mock");
+  be.className = "badge " + (framework.live_mode ? "live" : "mock");
+  $("s-agents").textContent = framework.counts.agents + " agents";
+  $("s-skills").textContent = framework.counts.skills + " skills";
+  $("s-runs").textContent = (framework.storage.runs||0) + " runs";
+  $("s-tokens").textContent = fmt(framework.storage.tokens) + " tok";
+
+  const opts = framework.departments.map(d => `<option value="${d.key}">${d.key.replace(/_/g," ")}</option>`).join("");
+  $("agent-dept").innerHTML = '<option value="">all departments</option>' + opts;
+  $("skill-dept").innerHTML = '<option value="">all departments</option>' + opts;
+  $("deptgrid").innerHTML = framework.departments.map(d => `
+    <div class="deptcard"><b>${esc(d.key.replace(/_/g," "))}</b>
+      <div class="muted">${d.agents} agents · ${d.skills.length} skills</div>
+      <div class="muted" style="margin-top:6px">${esc(d.skills.slice(0,4).join(", "))}${d.skills.length>4?", …":""}</div>
+    </div>`).join("");
+
+  const p = framework.policy;
+  $("policies").innerHTML = [
+    ["parallel", p.max_parallel], ["retries", p.max_retries], ["rework", p.max_rework],
+    ["review", p.review_enabled ? "on" : "off"], ["approvals", p.require_approval ? "on" : "off"],
+    ["budget", p.budget_tokens ? fmt(p.budget_tokens) : "unlimited"],
+    ["task cap", p.max_tasks_per_run]
+  ].map(([k,v]) => `<span>${k}</span><span>${v}</span>`).join("");
+}
+
+/* ---------------------------------------------------------------- chat */
+const STATUS_CLASS = {running:"s-running", done:"s-done", failed:"s-failed",
+  skipped:"s-skipped", awaiting_approval:"s-awaiting_approval"};
+
+function logEvent(ev, target = "log"){
+  const box = $(target);
+  if (!box) return;
+  if (box.querySelector(".empty")) box.innerHTML = "";
+  const d = document.createElement("div");
+  const p = ev.payload || {};
+  const detail = p.title || p.tool || p.error || p.status || p.reason || p.check || "";
+  d.innerHTML = `<b>${esc(ev.type)}</b> ${esc(detail)}`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderRun(run){
+  $("run-id").textContent = run.id ? "· " + run.id : "";
+  $("orch-status").textContent = "orchestrator " + (run.status || "idle");
+  const st = $("run-status");
+  st.textContent = run.status || "idle";
+  st.style.color = {done:"var(--ok)", failed:"var(--bad)", running:"var(--accent)",
+    awaiting_approval:"var(--warn)", cancelled:"var(--warn)"}[run.status] || "var(--muted)";
+  if (run.summary) $("summary").textContent = run.summary;
+
+  const tasks = (run.plan && run.plan.tasks) || [];
+  const counts = run.counts || {};
+  const budget = run.budget || {};
+  $("budget").innerHTML = [
+    ["tokens", fmt(budget.tokens ?? run.tokens)],
+    ["cost", "$" + Number(budget.cost_usd ?? run.cost_usd ?? 0).toFixed(4)],
+    ["tasks", Object.entries(counts).map(([k,v]) => `${k}:${v}`).join(" ") || "-"],
+    ["delegated", tasks.filter(t => t.parent_id).length]
+  ].map(([k,v]) => `<span>${k}</span><span>${esc(String(v))}</span>`).join("");
+
+  const waiting = tasks.filter(t => t.status === "awaiting_approval");
+  $("appr-count").textContent = waiting.length ? `(${waiting.length})` : "";
+  $("approvals").innerHTML = waiting.length ? waiting.map(t => `
+    <div class="item"><span class="g">${esc(t.title)}</span>
+      <div class="m"><span>${esc(t.department)}</span><span>${esc(t.skill)}</span></div>
+      <div class="row" style="margin-top:7px">
+        <button class="ok tiny" onclick="decide('${t.id}',true)">Approve</button>
+        <button class="no tiny" onclick="decide('${t.id}',false)">Reject</button>
+      </div></div>`).join("") : '<div class="empty">nothing waiting</div>';
+
+  if (!tasks.length) return;
+  $("tasks").innerHTML = tasks.map(t => {
+    const agent = t.agent_id ? t.agent_id.split("__").pop().replace(/_/g," ") : "unassigned";
+    const score = t.review_score != null ? `<span class="score">${t.review_score.toFixed(2)}</span>` : "";
+    const flags = [t.parent_id ? "delegated" : "", t.attempts > 1 ? t.attempts + " attempts" : ""]
+      .filter(Boolean).join(" · ");
+    return `<div class="task ${STATUS_CLASS[t.status]||""}" onclick="this.classList.toggle('open')">
+      <div class="trow"><div><div class="title">${esc(t.title)}</div>
+        <div class="meta">${esc(t.department)} · ${esc(t.skill)} · ${esc(agent)}${flags ? " · " + flags : ""}</div></div>
+        <div class="row" style="gap:6px">${score}<span class="status">${t.status.replace(/_/g," ")}</span></div></div>
+      ${t.result ? `<div class="result">${esc(t.result)}</div>` : ""}</div>`;
+  }).join("");
+}
+
+async function loadArtifacts(runId){
+  try{
+    const items = await api(`/api/runs/${runId}/artifacts`);
+    $("artifacts").innerHTML = items.length ? items.map(a =>
+      `<div class="item"><a href="/api/runs/${runId}/artifacts/${encodeURIComponent(a.name)}"
+        target="_blank" style="color:var(--accent)">${esc(a.name)}</a>
+        <span class="muted"> · ${a.bytes}b</span></div>`).join("")
+      : '<div class="empty">none yet</div>';
+  }catch(e){ $("artifacts").innerHTML = '<div class="empty">unavailable</div>'; }
+}
+
+async function openRun(runId){
+  currentRun = runId;
+  const run = await api(`/api/runs/${runId}?events=true`);
+  renderRun(run);
+  $("log").innerHTML = "";
+  (run.events || []).slice(-150).forEach(e => logEvent(e, "log"));
+  if (!(run.events || []).length) $("log").innerHTML = '<div class="empty">no events</div>';
+  loadArtifacts(runId);
+  connect(runId);
+  document.querySelector('#nav button[data-v="chat"]').click();
+}
+
+function connect(runId){
+  if (socket) socket.close();
+  const proto = location.protocol === "https:" ? "wss://" : "ws://";
+  const q = token() ? "?token=" + encodeURIComponent(token()) : "";
+  socket = new WebSocket(proto + location.host + "/ws/runs/" + runId + q);
+  socket.onmessage = (msg) => {
+    const ev = JSON.parse(msg.data);
+    if (ev.kind === "ping") return;
+    if (ev.kind === "event"){ logEvent(ev, "log"); refresh(); }
+  };
+  socket.onclose = () => { /* run may have finished */ };
+}
+
+async function refresh(){
+  if (!currentRun) return;
+  const run = await api("/api/runs/" + currentRun);
+  renderRun(run);
+  if (["done","failed","cancelled"].includes(run.status)){
+    loadArtifacts(currentRun); loadFramework(); loadLogs();
+  }
+}
+
+async function decide(taskId, approved){
+  await api(`/api/runs/${currentRun}/approvals/${taskId}`, {method:"POST",
+    body: JSON.stringify({approved, note: approved ? "approved in dashboard" : "rejected in dashboard"})});
+  toast(approved ? "approved" : "rejected");
+  refresh();
+}
+
+$("submit").onclick = async () => {
+  const goal = $("goal").value.trim();
+  if (goal.length < 3){ toast("write an instruction first"); return; }
+  $("submit").disabled = true;
+  try{
+    $("log").innerHTML = ""; $("tasks").innerHTML = '<div class="empty">planning…</div>';
+    $("summary").textContent = "Waiting for the run to finish.";
+    const run = await api("/api/runs", {method:"POST", body: JSON.stringify({
+      goal,
+      auto_approve: $("auto").checked,
+      project_id: $("project").value || null,
+      allow_destructive: $("destructive").checked
+    })});
+    currentRun = run.id; renderRun(run); connect(run.id);
+  }catch(e){ toast("error: " + e.message); }
+  finally{ $("submit").disabled = false; }
+};
+
+$("replay").onclick = async () => {
+  if (!currentRun) return toast("no run selected");
+  const run = await api(`/api/runs/${currentRun}/replay`, {method:"POST"});
+  currentRun = run.id; $("log").innerHTML = ""; renderRun(run); connect(run.id);
+  toast("replayed");
+};
+
+$("cancel").onclick = async () => {
+  if (!currentRun) return;
+  try{ await api(`/api/runs/${currentRun}/cancel`, {method:"POST"}); refresh(); toast("cancelled"); }
+  catch(e){ toast(e.message); }
+};
+
+/* ------------------------------------------------------------ projects */
+async function loadProjects(){
+  runsCache = await api("/api/runs?limit=25");
+  $("runlist").innerHTML = runsCache.length ? runsCache.map(r => `
+    <div class="item click" onclick="openRun('${r.id}')">
+      <span class="g">${esc(r.goal)}</span>
+      <div class="m"><span>${r.status}</span><span>${fmt(r.tokens)} tok</span>
+        <span>${(r.created_at||"").slice(0,16).replace("T"," ")}</span>
+        ${r.project_id ? `<span>${esc(r.project_id)}</span>` : ""}</div></div>`).join("")
+    : '<div class="empty">no runs yet</div>';
+
+  const projects = await api("/api/projects");
+  $("projects").innerHTML = projects.length ? projects.map(p => `
+    <div class="item"><span class="g">${esc(p.name)}</span>
+      <div class="m"><span>${p.runs} runs</span><span>${esc(p.id)}</span></div>
+      <div class="row" style="margin-top:6px"><button class="ghost tiny" onclick="filterProject('${p.id}')">Show runs</button></div>
+    </div>`).join("") : '<div class="empty">no projects yet</div>';
+
+  const sel = $("project");
+  sel.innerHTML = '<option value="">no project</option>' +
+    projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+}
+
+async function filterProject(id){
+  const runs = await api("/api/runs?limit=50&project_id=" + encodeURIComponent(id));
+  $("runlist").innerHTML = runs.length ? runs.map(r => `
+    <div class="item click" onclick="openRun('${r.id}')"><span class="g">${esc(r.goal)}</span>
+      <div class="m"><span>${r.status}</span><span>${fmt(r.tokens)} tok</span></div></div>`).join("")
+    : '<div class="empty">no runs in this project</div>';
+}
+
+$("pcreate").onclick = async () => {
+  const name = $("pname").value.trim();
+  if (name.length < 2) return toast("name too short");
+  await api("/api/projects", {method:"POST", body: JSON.stringify({name})});
+  $("pname").value = ""; toast("project created"); loadProjects();
+};
+
+/* -------------------------------------------------------------- agents */
+async function loadAgents(){
+  const q = $("agent-q").value.trim();
+  const dept = $("agent-dept").value;
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (dept) params.set("department", dept);
+  const agents = await api("/api/agents?" + params.toString());
+  $("agent-count").textContent = `(${agents.length})`;
+  $("agentlist").innerHTML = agents.map(a => `
+    <div class="item"><span class="g">${esc(a.name)} <span class="chip">${esc(a.department.replace(/_/g," "))}</span></span>
+      <div class="m"><span>${esc(a.description)}</span></div>
+      <div class="m"><span>primary: ${esc((a.primary_skills||[]).join(", "))}</span></div></div>`).join("")
+    || '<div class="empty">no match</div>';
+}
+$("agent-q").oninput = () => { clearTimeout(window._aq); window._aq = setTimeout(loadAgents, 220); };
+$("agent-dept").onchange = loadAgents;
+
+/* -------------------------------------------------------------- skills */
+async function loadSkills(){
+  const dept = $("skill-dept").value;
+  const skills = await api("/api/skills" + (dept ? "?department=" + encodeURIComponent(dept) : ""));
+  $("skill-count").textContent = `(${skills.length})`;
+  $("skilllist").innerHTML = skills.map(s => `
+    <div class="item"><span class="g">${esc(s.name)}
+      <span class="chip ${s.deterministic ? "ok" : ""}">${s.deterministic ? "python" : "llm"}</span>
+      <span class="chip">${esc(s.department.replace(/_/g," "))}</span></span>
+      <div class="m"><span>${esc(s.description)}</span></div></div>`).join("");
+}
+$("skill-dept").onchange = loadSkills;
+
+/* --------------------------------------------------------------- tools */
+async function loadTools(){
+  const tools = await api("/api/tools");
+  $("tooltable").querySelector("tbody").innerHTML = tools.map(t => `
+    <tr><td><b>${esc(t.name)}</b><div class="muted">${esc(t.description)}</div></td>
+      <td>${(t.permissions||[]).map(p => `<span class="chip">${esc(p)}</span>`).join(" ") || '<span class="muted">none</span>'}</td>
+      <td>${t.destructive ? '<span class="chip bad">destructive</span>' : '<span class="chip ok">safe</span>'}
+        ${t.enabled === false ? '<span class="chip warn">disabled</span>' : ""}
+        <div class="muted">${esc(t.provider || "")}</div></td></tr>`).join("");
+
+  const data = await api("/api/integrations");
+  $("integrations").innerHTML = data.integrations.map(i => {
+    const cls = i.status === "connected" ? "ok" : (i.status === "error" ? "bad" : (i.configured ? "warn" : ""));
+    return `<div class="item"><span class="g">${esc(i.label)} <span class="chip ${cls}">${esc(i.status.replace(/_/g," "))}</span></span>
+      <div class="m"><span>${esc(i.detail)}</span></div>
+      ${i.requires ? `<div class="m"><span>requires: ${esc(i.requires)}</span></div>` : ""}
+      <div class="row" style="margin-top:6px"><button class="ghost tiny" onclick="verifyOne('${i.key}')">Verify</button></div></div>`;
+  }).join("");
+}
+
+async function verifyOne(key){
+  toast("checking " + key + "…", 1200);
+  const res = await api(`/api/integrations/${key}/verify`, {method:"POST"});
+  toast(key + ": " + res.status);
+  loadTools();
+}
+
+$("verifyall").onclick = async () => {
+  toast("verifying all integrations…", 1500);
+  await api("/api/integrations/verify", {method:"POST"});
+  loadTools(); toast("verification complete");
+};
+
+
+/* ---------------------------------------------------------- automation */
+async function loadAutomation(){
+  try{
+    const wfs = await api("/api/workflows");
+    $("wf-count").textContent = wfs.length ? `(${wfs.length})` : "";
+    $("wf-list").innerHTML = wfs.length ? wfs.map(w => `
+      <div class="item"><span class="g">${esc(w.name)} <span class="chip">v${w.version}</span></span>
+        <div class="m"><span>${esc((w.goal_template||"").slice(0,70))}</span>
+          <span>${esc((w.updated_at||"").slice(0,16))}</span></div>
+        <div class="row" style="margin-top:6px">
+          <button class="ghost tiny" onclick="runWorkflow('${w.id}')" data-i18n="auto.runnow">Run now</button>
+          <button class="ghost tiny" onclick="makeHook('${w.id}')">+ webhook</button>
+          <button class="ghost tiny" onclick="deleteWorkflow('${w.id}')">delete</button>
+        </div></div>`).join("") : '<div class="empty" data-i18n="auto.none">nothing yet</div>';
+  }catch(e){ $("wf-list").innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+
+  try{
+    const schs = await api("/api/schedules");
+    $("sch-list").innerHTML = schs.length ? schs.map(s => `
+      <div class="item"><span class="g">${esc(s.name)} <span class="chip ${s.enabled ? "ok" : ""}">${s.enabled ? "on" : "off"}</span></span>
+        <div class="m"><span>${esc(s.kind)}</span><span>every ${s.every_seconds}s</span>
+          <span>next ${esc((s.next_run_at||"").slice(11,16))}</span></div>
+        <div class="row" style="margin-top:6px">
+          <button class="ghost tiny" onclick="fireSchedule('${s.id}')" data-i18n="auto.runnow">Run now</button>
+          <button class="ghost tiny" onclick="toggleSchedule('${s.id}', ${s.enabled ? "false" : "true"})">
+            ${s.enabled ? "disable" : "enable"}</button>
+          <button class="ghost tiny" onclick="deleteSchedule('${s.id}')">delete</button>
+        </div></div>`).join("") : '<div class="empty" data-i18n="auto.none">nothing yet</div>';
+  }catch(e){ $("sch-list").innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+
+  try{
+    const hooks = await api("/api/hooks");
+    $("hook-list").innerHTML = hooks.length ? hooks.map(h => `
+      <div class="item"><span class="g">${esc(h.workflow_id)} <span class="chip">${h.enabled ? "active" : "off"}</span></span>
+        <div class="m"><span>${esc((h.last_called_at||"never called").slice(0,19))}</span></div>
+        <div class="row" style="margin-top:6px">
+          <button class="ghost tiny" onclick="deleteHook('${h.id}')">delete</button>
+        </div></div>`).join("") : '<div class="empty" data-i18n="auto.none">nothing yet</div>';
+  }catch(e){ $("hook-list").innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+
+  try{
+    const plugins = await api("/api/plugins");
+    $("plugin-list").innerHTML = plugins.length ? plugins.map(p => `
+      <div class="item"><span class="g">${esc(p.name)} <span class="chip">${esc(p.version)}</span>
+        <span class="chip ${p.trust === "verified" ? "ok" : "warn"}">${esc(p.trust)}</span>
+        <span class="chip ${p.enabled ? "ok" : ""}">${p.enabled ? "on" : "off"}</span></span>
+        <div class="m"><span>${esc((p.installed_at||"").slice(0,16))}</span></div>
+        <div class="row" style="margin-top:6px">
+          <button class="ghost tiny" onclick="togglePlugin('${p.id}', ${p.enabled ? "false" : "true"})">
+            ${p.enabled ? "disable" : "enable"}</button>
+          <button class="ghost tiny" onclick="removePlugin('${p.id}')">remove</button>
+        </div></div>`).join("") : '<div class="empty" data-i18n="auto.none">nothing yet</div>';
+  }catch(e){ $("plugin-list").innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+async function runWorkflow(id){
+  try{
+    const run = await api(`/api/workflows/${id}/run`, {method:"POST", body: JSON.stringify({params:{}})});
+    currentRun = run.id; connect(run.id); toast("workflow started");
+    document.querySelector('#nav button[data-v="chat"]').click(); renderRun(run);
+  }catch(e){ toast(e.message); }
+}
+async function deleteWorkflow(id){
+  try{ await api(`/api/workflows/${id}`, {method:"DELETE"}); toast("deleted"); loadAutomation(); }
+  catch(e){ toast(e.message); }
+}
+async function makeHook(workflowId){
+  try{
+    const hook = await api("/api/hooks", {method:"POST", body: JSON.stringify({workflow_id: workflowId})});
+    prompt("Webhook URL (treat as a secret):", location.origin + "/api/hooks/" + hook.token + "/trigger");
+    loadAutomation();
+  }catch(e){ toast(e.message); }
+}
+async function deleteHook(id){
+  try{ await api(`/api/hooks/${id}`, {method:"DELETE"}); toast("deleted"); loadAutomation(); }
+  catch(e){ toast(e.message); }
+}
+async function fireSchedule(id){
+  try{ const r = await api(`/api/schedules/${id}/run`, {method:"POST"}); toast("fired: " + (r.run_id || r.error));
+       loadAutomation(); }
+  catch(e){ toast(e.message); }
+}
+async function toggleSchedule(id, enable){
+  try{ await api(`/api/schedules/${id}/${enable ? "enable" : "disable"}`, {method:"POST"}); loadAutomation(); }
+  catch(e){ toast(e.message); }
+}
+async function deleteSchedule(id){
+  try{ await api(`/api/schedules/${id}`, {method:"DELETE"}); loadAutomation(); }
+  catch(e){ toast(e.message); }
+}
+async function togglePlugin(id, enable){
+  try{ await api(`/api/plugins/${id}/${enable ? "enable" : "disable"}`, {method:"POST"});
+       toast(enable ? "plugin enabled" : "plugin disabled"); loadAutomation(); loadFramework(); }
+  catch(e){ toast(e.message); }
+}
+async function removePlugin(id){
+  try{ await api(`/api/plugins/${id}`, {method:"DELETE"}); loadAutomation(); loadFramework(); }
+  catch(e){ toast(e.message); }
+}
+
+$("sch-create").onclick = async () => {
+  const name = $("sch-name").value.trim(), goal = $("sch-goal").value.trim();
+  const every = parseInt($("sch-every").value, 10) || 3600;
+  if (!name || !goal) return toast("name and goal required");
+  try{
+    await api("/api/schedules", {method:"POST", body: JSON.stringify({name, goal, every_seconds: every})});
+    $("sch-name").value = ""; $("sch-goal").value = ""; toast("schedule created"); loadAutomation();
+  }catch(e){ toast(e.message); }
+};
+
+$("plugin-file").onchange = async (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append("file", file);
+  try{
+    const headers = token() ? {"Authorization": "Bearer " + token()} : {};
+    const res = await fetch("/api/plugins/install", {method:"POST", body: form, headers});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "install failed");
+    toast(`installed ${data.name}@${data.version} (${data.trust})`);
+    loadAutomation(); loadFramework();
+  }catch(e){ toast(e.message); }
+  finally{ ev.target.value = ""; }
+};
+
+/* --------------------------------------------------------------- usage */
+async function loadUsage(){
+  try{
+    const usage = await api("/api/billing/usage");
+    $("usage-period").textContent = usage.period || "";
+    $("usage-totals").innerHTML = [
+      ["tokens", fmt(usage.tokens)], ["cost", "$" + Number(usage.cost_usd || 0).toFixed(4)],
+      ["entries", usage.entries], ["quota left", usage.quota_remaining === null ? "unlimited" : fmt(usage.quota_remaining)]
+    ].map(([k,v]) => `<span>${esc(k)}</span><span>${esc(String(v))}</span>`).join("");
+    $("usage-models").innerHTML = (usage.by_model || []).length ? usage.by_model.map(m => `
+      <div class="item"><span class="g">${esc(m.model)}</span>
+        <div class="m"><span>in ${fmt(m.input_tokens)}</span><span>out ${fmt(m.output_tokens)}</span>
+          <span>$${Number(m.cost_usd).toFixed(4)}</span></div></div>`).join("")
+      : '<div class="empty" data-i18n="auto.none">nothing yet</div>';
+    if ((usage.unpriced_models || []).length){
+      $("usage-models").innerHTML += `<div class="muted" style="margin-top:6px">unpriced: ${esc(usage.unpriced_models.join(", "))}</div>`;
+    }
+  }catch(e){ toast(e.message); }
+
+  try{
+    const pricing = await api("/api/billing/pricing");
+    $("price-table").querySelector("tbody").innerHTML = pricing.models.map(m => `
+      <tr><td>${esc(m.model)}</td><td>$${m.input_per_1m}</td><td>$${m.output_per_1m}</td></tr>`).join("");
+  }catch(e){ /* leave the table empty */ }
+}
+
+$("est-btn").onclick = async () => {
+  const goal = $("est-goal").value.trim();
+  if (goal.length < 3) return toast("write a goal first");
+  try{
+    const est = await api("/api/billing/estimate", {method:"POST", body: JSON.stringify({goal})});
+    $("est-out").innerHTML = [
+      ["model", est.model], ["calls", est.calls], ["~tokens", fmt(est.estimated_input_tokens + est.estimated_output_tokens)],
+      ["~cost", "$" + Number(est.estimated_cost_usd).toFixed(4)]
+    ].map(([k,v]) => `<span>${esc(k)}</span><span>${esc(String(v))}</span>`).join("");
+  }catch(e){ toast(e.message); }
+};
+
+/* ----------------------------------------------------------- lite mode */
+function applyLite(){
+  const on = localStorage.getItem("omniforge_lite") === "1";
+  document.body.classList.toggle("lite", on);
+}
+$("litetoggle").onclick = () => {
+  const on = localStorage.getItem("omniforge_lite") === "1";
+  localStorage.setItem("omniforge_lite", on ? "0" : "1");
+  applyLite(); toast(on ? "lite mode off" : "lite mode on");
+};
+
+/* ---------------------------------------------------------------- logs */
+async function loadLogs(){
+  const calls = await api("/api/tool-calls?limit=40");
+  $("toolcalls").innerHTML = calls.length ? calls.map(c => `
+    <div class="item"><span class="g">${esc(c.tool)} <span class="chip ${c.ok ? "ok" : "bad"}">${c.ok ? "ok" : "failed"}</span></span>
+      <div class="m"><span>${esc(c.agent_id || "-")}</span><span>${c.duration_s}s</span>
+        <span>${esc((c.ts||"").slice(11,19))}</span></div>
+      ${c.error ? `<div class="m"><span>${esc(c.error)}</span></div>` : ""}</div>`).join("")
+    : '<div class="empty">no tool calls yet</div>';
+
+  if (!currentRun) return;
+  const events = await api(`/api/runs/${currentRun}/events?limit=200`);
+  $("log2").innerHTML = "";
+  events.slice(-200).forEach(e => logEvent(e, "log2"));
+  if (!events.length) $("log2").innerHTML = '<div class="empty">no events</div>';
+}
+
+/* ---------------------------------------------------------------- boot */
+async function startApp(){
+  try{
+    await loadFramework();
+    await loadProjects();
+    const recent = await api("/api/runs?limit=1");
+    if (recent.length) await openRun(recent[0].id);
+    if (authEnabled) loadMonitor();
+    if (new URLSearchParams(location.search).get("lite") === "1") {
+      localStorage.setItem("omniforge_lite", "1");
+    }
+    applyLite();
+  }catch(e){ toast("backend error: " + e.message, 5000); }
+}
+
+(async () => {
+  const me = await loadMe();
+  if (authEnabled && !(me && me.identity)) return;   // wait for sign-in
+  await startApp();
+})();
+</script>
+</body>
+</html>
