@@ -147,6 +147,8 @@
   <button data-v="agents"><i>◉</i><span data-i18n="nav.agents">Agents</span></button>
   <button data-v="skills"><i>✦</i><span data-i18n="nav.skills">Skills</span></button>
   <button data-v="tools"><i>⚙</i><span data-i18n="nav.tools">Tools</span></button>
+  <button data-v="workspace"><i>▤</i><span data-i18n="nav.workspace">Workspace</span></button>
+  <button data-v="builder"><i>⌗</i><span data-i18n="nav.builder">Builder</span></button>
   <button data-v="automation"><i>⚡</i><span data-i18n="nav.automation">Automation</span></button>
   <button data-v="monitor"><i>◐</i><span data-i18n="nav.monitor">Monitor</span></button>
   <button data-v="usage"><i>₹</i><span data-i18n="nav.usage">Usage</span></button>
@@ -275,6 +277,53 @@
           <h2 data-i18n="tools.policies">Policies</h2>
           <div class="kv" id="policies"><span>-</span><span>-</span></div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= WORKSPACE ========================= -->
+  <section class="view" id="v-workspace">
+    <div class="grid two">
+      <div class="panel">
+        <h2><span data-i18n="ws.files">Files</span>
+          <label class="ghost tiny" style="cursor:pointer;border:1px solid var(--line);border-radius:7px;padding:4px 9px">
+            <span data-i18n="ws.upload">Upload</span>
+            <input type="file" id="ws-file" style="display:none" />
+          </label></h2>
+        <select id="ws-project" style="margin-bottom:10px" aria-label="project"></select>
+        <div class="scroll" id="ws-list"><div class="empty" data-i18n="ws.noproject">pick a project</div></div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2><span data-i18n="ws.editor">Editor</span> <span class="muted" id="ws-current"></span>
+            <button class="ghost tiny" id="ws-save" data-i18n="ws.save">Save</button></h2>
+          <textarea id="ws-code" spellcheck="false" style="min-height:260px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px"></textarea>
+        </div>
+        <div class="panel" style="margin-top:12px">
+          <h2><span data-i18n="ws.sandbox">Sandbox</span>
+            <span class="chip" id="ws-sb-state">-</span>
+            <button class="ghost tiny" id="ws-run" data-i18n="ws.run">Run code</button></h2>
+          <div class="muted" style="margin-bottom:6px">Python only. Process isolation with rlimits, not a container.</div>
+          <div id="ws-out" class="scroll" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap"><div class="empty">-</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================== BUILDER ========================== -->
+  <section class="view" id="v-builder">
+    <div class="panel">
+      <h2><span data-i18n="b.title">Workflow builder</span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <input type="text" id="b-name" data-i18n-ph="b.name" placeholder="Workflow name" style="max-width:200px" />
+        <input type="text" id="b-goal" data-i18n-ph="b.goal" placeholder="Goal template, e.g. Ship {{env}}" style="max-width:320px" />
+        <button class="tiny" id="b-add" data-i18n="b.add">Add task</button>
+        <button id="b-save" data-i18n="b.save">Save workflow</button>
+      </div>
+      <div id="b-tasks"><div class="empty" data-i18n="b.empty">no tasks yet</div></div>
+      <div class="muted" style="margin-top:10px">
+        Conditions are declarative: <code>param=value</code> means "run this task only when
+        that parameter equals the value". Use <code>param=*</code> for "exists".
       </div>
     </div>
   </section>
@@ -646,6 +695,8 @@ document.querySelectorAll("#nav button").forEach(btn => {
     if (btn.dataset.v === "monitor") loadMonitor();
     if (btn.dataset.v === "security") loadSecurity();
     if (btn.dataset.v === "automation") loadAutomation();
+    if (btn.dataset.v === "workspace") loadWorkspace();
+    if (btn.dataset.v === "builder") renderBuilder();
     if (btn.dataset.v === "usage") loadUsage();
     window.scrollTo({top:0, behavior:"smooth"});
   };
@@ -925,6 +976,159 @@ $("verifyall").onclick = async () => {
   loadTools(); toast("verification complete");
 };
 
+
+
+/* ---------------------------------------------------------- workspace */
+let wsProject = "", wsFile = null;
+
+async function loadWorkspace(){
+  try{
+    const projects = await api("/api/projects");
+    const sel = $("ws-project");
+    sel.innerHTML = '<option value="" data-i18n="ws.noproject">pick a project</option>' +
+      projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+    if (wsProject) sel.value = wsProject;
+    const sb = await api("/api/sandbox");
+    $("ws-sb-state").textContent = sb.enabled ? "enabled" : "disabled";
+    $("ws-sb-state").className = "chip " + (sb.enabled ? "ok" : "");
+  }catch(e){ toast(e.message); }
+  if (wsProject) await loadFiles(wsProject);
+}
+
+async function loadFiles(projectId){
+  try{
+    const files = await api("/api/files?project_id=" + encodeURIComponent(projectId));
+    $("ws-list").innerHTML = files.length ? files.map(f => `
+      <div class="item click" onclick="openFile('${f.id}')">
+        <span class="g">${esc(f.name)}</span>
+        <div class="m"><span>${f.bytes}b</span><span>${esc((f.created_at||"").slice(0,16))}</span></div>
+      </div>`).join("") : '<div class="empty">no files</div>';
+  }catch(e){ $("ws-list").innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+async function openFile(fileId){
+  try{
+    const res = await fetch("/api/files/" + fileId + "/download",
+      {headers: token() ? {"Authorization": "Bearer " + token()} : {}});
+    if (!res.ok) throw new Error("download failed");
+    const text = await res.text();
+    wsFile = fileId;
+    $("ws-code").value = text;
+    $("ws-current").textContent = "· " + fileId;
+  }catch(e){ toast(e.message); }
+}
+
+$("ws-project").onchange = async (ev) => {
+  wsProject = ev.target.value;
+  $("ws-code").value = ""; $("ws-current").textContent = "";
+  if (wsProject) await loadFiles(wsProject);
+};
+
+$("ws-file").onchange = async (ev) => {
+  const file = ev.target.files[0];
+  if (!file || !wsProject) { toast("pick a project first"); return; }
+  const form = new FormData();
+  form.append("file", file);
+  try{
+    const headers = token() ? {"Authorization": "Bearer " + token()} : {};
+    const res = await fetch(`/api/projects/${wsProject}/files`, {method:"POST", body: form, headers});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "upload failed");
+    toast("uploaded " + data.name);
+    loadFiles(wsProject);
+  }catch(e){ toast(e.message); }
+  finally{ ev.target.value = ""; }
+};
+
+$("ws-save").onclick = async () => {
+  if (!wsFile) return toast("open a file first");
+  try{
+    const out = await api("/api/files/" + wsFile, {method:"PATCH",
+      body: JSON.stringify({content: $("ws-code").value})});
+    toast("saved (" + out.bytes + " bytes)");
+    if (wsProject) loadFiles(wsProject);
+  }catch(e){ toast(e.message); }
+};
+
+$("ws-run").onclick = async () => {
+  const code = $("ws-code").value;
+  if (!code.trim()) return toast("nothing to run");
+  $("ws-out").textContent = "running…";
+  try{
+    const out = await api("/api/sandbox/run", {method:"POST", body: JSON.stringify({code})});
+    $("ws-out").textContent = (out.stdout || "") + (out.stderr ? "\n[stderr]\n" + out.stderr : "") +
+      `\n[exit ${out.exit_code}${out.timed_out ? ", timed out" : ""}, ${out.duration_s}s]`;
+  }catch(e){ $("ws-out").textContent = e.message; }
+};
+
+/* ------------------------------------------------------------ builder */
+let builderTasks = [];
+
+function renderBuilder(){
+  if (!builderTasks.length){
+    $("b-tasks").innerHTML = '<div class="empty" data-i18n="b.empty">no tasks yet</div>';
+    return;
+  }
+  $("b-tasks").innerHTML = builderTasks.map((t, i) => `
+    <div class="item">
+      <div class="row">
+        <input type="text" value="${esc(t.title)}" placeholder="task title" style="max-width:200px"
+               oninput="builderTasks[${i}].title = this.value" />
+        <select onchange="builderTasks[${i}].department = this.value" style="max-width:150px">
+          ${(framework ? framework.departments : []).map(d =>
+            `<option value="${d.key}" ${d.key === t.department ? "selected" : ""}>${d.key.replace(/_/g," ")}</option>`).join("")}
+        </select>
+        <select onchange="builderTasks[${i}].skill = this.value" style="max-width:180px">
+          ${((framework ? framework.departments : []).find(d => d.key === t.department) || {skills:[]}).skills
+            .map(s => `<option value="${s}" ${s === t.skill ? "selected" : ""}>${s}</option>`).join("")}
+        </select>
+        <input type="text" value="${esc(t.depends || "")}" placeholder="depends on (title)" style="max-width:160px"
+               oninput="builderTasks[${i}].depends = this.value" />
+        <input type="text" value="${esc(t.when || "")}" placeholder="param=value" style="max-width:150px"
+               oninput="builderTasks[${i}].when = this.value" />
+        <button class="ghost tiny" onclick="builderTasks.splice(${i},1); renderBuilder()">×</button>
+      </div>
+    </div>`).join("");
+}
+
+$("b-add").onclick = () => {
+  const dept = framework ? framework.departments[0] : {key: "research", skills: ["web_research"]};
+  builderTasks.push({title: "Task " + (builderTasks.length + 1), department: dept.key,
+                     skill: (dept.skills || [])[0] || "", depends: "", when: ""});
+  renderBuilder();
+};
+
+$("b-save").onclick = async () => {
+  const name = $("b-name").value.trim();
+  const goal = $("b-goal").value.trim() || name;
+  if (!name || !builderTasks.length) return toast("name and at least one task are required");
+  const keyed = builderTasks.map((t, i) => ({...t, key: "t" + (i + 1)}));
+  const byTitle = {};
+  keyed.forEach(t => { byTitle[t.title.trim()] = t.key; });
+  const tasks = keyed.map(t => {
+    const task = {
+      key: t.key,
+      title: t.title.trim() || "task",
+      description: "",
+      department: t.department,
+      skill: t.skill,
+      depends_on: (t.depends || "").split(",").map(s => s.trim()).filter(Boolean)
+                    .map(s => byTitle[s] || s),
+    };
+    const cond = (t.when || "").trim();
+    if (cond.includes("=")) {
+      const [param, value] = cond.split("=").map(s => s.trim());
+      task.when = value === "*" ? {param, exists: true} : {param, equals: value};
+    }
+    return task;
+  });
+  try{
+    const wf = await api("/api/workflows", {method:"POST",
+      body: JSON.stringify({name, goal_template: goal, plan: {goal, tasks}})});
+    toast("workflow saved: " + wf.id);
+    builderTasks = []; renderBuilder(); loadAutomation();
+  }catch(e){ toast(e.message); }
+};
 
 /* ---------------------------------------------------------- automation */
 async function loadAutomation(){
