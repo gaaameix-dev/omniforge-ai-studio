@@ -36,6 +36,26 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS documents (
     id BIGSERIAL PRIMARY KEY, run_id TEXT, title TEXT NOT NULL, text TEXT NOT NULL, ts TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS usage (
+    id BIGSERIAL PRIMARY KEY, user_id TEXT, run_id TEXT, model TEXT,
+    input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
+    cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0, ts TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS audit (
+    id BIGSERIAL PRIMARY KEY, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT,
+    ip TEXT, ts TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tool_calls (
+    id BIGSERIAL PRIMARY KEY, run_id TEXT, agent_id TEXT, tool TEXT NOT NULL,
+    ok INTEGER NOT NULL, duration_s DOUBLE PRECISION NOT NULL DEFAULT 0, error TEXT,
+    args_summary TEXT, ts TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, metric TEXT NOT NULL, comparator TEXT NOT NULL,
+    threshold DOUBLE PRECISION NOT NULL, channel TEXT NOT NULL, target TEXT,
+    cooldown_seconds INTEGER NOT NULL DEFAULT 3600, enabled INTEGER NOT NULL DEFAULT 1,
+    last_fired_at TEXT, created_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_tasks_run ON tasks(run_id, seq);
 CREATE INDEX IF NOT EXISTS idx_events_run ON events(run_id, id);
 CREATE INDEX IF NOT EXISTS idx_runs_created ON runs(created_at DESC);
