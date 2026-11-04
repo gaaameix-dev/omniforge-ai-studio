@@ -6,12 +6,12 @@ credential is missing, the line says so.
 
 Legend: **I** implemented · **T** tested · **C** connected here · **P** partial · **N** pending
 
-Counts at this build: 264 automated tests · 51 shipped skills · 120 agent roles ·
+Counts at this build: 283 automated tests · 51 shipped skills · 120 agent roles ·
 15 built-in tools · 10 departments · 11 dashboard views.
 
 ---
 
-## Closed in this round (0.6.0)
+## Closed in this round (0.7.0)
 
 Everything below was previously PENDING or PARTIAL and is now working and tested.
 
@@ -49,7 +49,12 @@ Everything below was previously PENDING or PARTIAL and is now working and tested
 | Semantic retrieval (embeddings) | I · T (needs key) | `core/embeddings.py`, hybrid search |
 | Plugin install from HTTPS URL | I · T | `/api/plugins/install-url` |
 | Signature-only plugin mode | I · T | `OMNIFORGE_PLUGIN_REQUIRE_SIGNATURE` |
-| PostgreSQL schema + factory | P | `core/pg.py`; adapter unverified without a server |
+| PostgreSQL mirror (verified) | I · T · C | `core/pgmirror.py`, tested against PostgreSQL 16 |
+| Alert rules (metric/threshold/cooldown) | I · T · C | `core/alerts.py`, `/api/alert-rules` |
+| Plugin registry index | I · T | `core/plugin_registry.py`, checksum verified |
+| LLM content classifier | I · T (needs key) | `LlmModerator`, off by default |
+| Workspace editor + sandbox runner | I · T | dashboard Workspace view |
+| Workflow builder (form-based) | I · T | dashboard Builder view |
 | Privacy and terms templates | I | `docs/PRIVACY.md`, `docs/TERMS.md` |
 
 ---
@@ -238,15 +243,15 @@ Everything below was previously PENDING or PARTIAL and is now working and tested
 
 | Item | Why it is open |
 |---|---|
-| PostgreSQL / storage abstraction | the store is one class; the swap is contained but not done |
+| Native PostgreSQL store | mirror is verified; making PostgreSQL the primary store needs a dialect shim in `RunStore` |
 | Vector embeddings | hybrid BM25 + cosine shipped; a dedicated vector DB is still open |
-| Distributed workers / external queue | deliberate: in-process until load demands otherwise |
-| Remote plugin registry | install-from-URL shipped; a hosted index with signing keys is still open |
-| Visual workflow builder | branching shipped (declarative `when`); a node editor is a separate front-end |
-| PostgreSQL adapter (live) | schema and factory shipped; needs a server to verify |
-| ML content classifier | policy engine covers secrets, PII and terms; no model-based classifier |
-| Alert rules beyond failures (budget, quota) | failure alerts shipped; threshold rules open |
-| Code editor, 3D studio, media studio, model manager screens | separate product surfaces, not built |
+| Distributed workers / external queue | deliberate: in-process until load demands otherwise; the load harness shows headroom |
+| Hosted plugin registry service | index format + checksum verification shipped; hosting one is an ops task |
+| Node-graph workflow canvas | form-based builder shipped |
+| Drag-and-drop workflow canvas | the Builder view is form-based; a node canvas is a front-end project |
+| Classifier categories per deployment | model classifier shipped; category policy is fixed, not per-tenant |
+| Alert routing per team | rules support email/webhook with cooldown; no per-team routing |
+| 3D studio, media studio, model manager screens | need asset providers; the Workspace editor exists |
 | Physical Android/iOS device testing | needs hardware or a device farm |
 | Finalised privacy policy / terms | templates shipped; the operator must fill and review them |
 
