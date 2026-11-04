@@ -2,7 +2,7 @@
 
 Legend
 - **Implemented** — code exists and runs.
-- **Tested** — covered by the automated suite (`pytest -q`, 264 tests).
+- **Tested** — covered by the automated suite (`pytest -q`, 283 tests).
 - **Connected** — wired to a real external service *in this checkout*. "Needs key"
   means the code path is real but there is no credential here, so it reports
   `not_configured` instead of pretending to work.
@@ -134,7 +134,13 @@ and `GET /api/integrations` report the same truth at runtime.
 | Load-test harness | Yes | Yes | Yes | `omniforge loadtest` |
 | Failure alerts by email | Yes | Yes | Console backend | `OMNIFORGE_ALERT_EMAIL` |
 | Plugin install from URL | Yes | Yes | Needs a URL | signature-only mode available |
-| PostgreSQL adapter | Partial | DDL only | No | needs a server |
+| PostgreSQL mirror | Yes | Yes | Yes | verified against PostgreSQL 16 |
+| Native PostgreSQL store | No | No | No | mirror only; dialect shim still open |
+| Alert rules with cooldown | Yes | Yes | Yes | email + webhook |
+| Plugin registry index | Yes | Yes | Needs a URL | checksum verified |
+| LLM content classifier | Yes | Yes | Needs key | off by default |
+| Workspace editor + sandbox run | Yes | Yes | Yes | dashboard view |
+| Workflow builder (form) | Yes | Yes | Yes | dashboard view |
 
 ## Surface
 
