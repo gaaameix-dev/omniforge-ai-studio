@@ -15,6 +15,7 @@ from .. import __version__
 from ..agents.roles import build_agent_registry, build_skill_registry, build_tool_registry
 from ..config import Settings
 from ..core import auth as auth_core
+from ..core.alerts import AlertEngine
 from ..core.auth import ANONYMOUS, Identity, action_for, allows, resolve_identity
 from ..core.billing import Billing
 from ..core.llm import build_llm
@@ -80,15 +81,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.mailer = build_mailer(cfg)
         app.state.notifier = Notifier(cfg.webhook_url)
         app.state.billing = Billing(cfg, store)
+        app.state.alerts = AlertEngine(store, cfg)
         app.state.limiter = RateLimiter(per_minute=cfg.rate_limit_per_minute, burst=cfg.rate_limit_burst)
         app.state.orchestrator = Orchestrator(
             settings=cfg, llm=build_llm(cfg), skills=skills, agents=agents,
             tools=tools, store=store, metrics=metrics, notifier=app.state.notifier,
             billing=app.state.billing, mailer=app.state.mailer,
+            alerts=app.state.alerts,
         )
         app.state.scheduler = Scheduler(
             app.state.orchestrator, store, tick_seconds=cfg.scheduler_tick_seconds
         )
+        app.state.alerts.mailer = app.state.mailer
+        app.state.alerts.notifier = app.state.notifier
+        app.state.alerts.billing = app.state.billing
         if cfg.scheduler_enabled:
             await app.state.scheduler.start()
         try:
