@@ -226,7 +226,7 @@ class MCPHttpClient:
             {
                 "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": {},
-                "clientInfo": {"name": "omniforge", "version": "0.6.0"},
+                "clientInfo": {"name": "omniforge", "version": "0.7.0"},
             },
         )
         await self._notify("notifications/initialized", {})
