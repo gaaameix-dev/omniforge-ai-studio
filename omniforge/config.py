@@ -134,6 +134,7 @@ class Settings:
     # --- content policy ----------------------------------------------------
     moderation_enabled: bool = True
     moderation_blocked_terms: tuple[str, ...] = ()
+    moderation_llm: bool = False          # add a model-based classifier pass
 
     # --- network policy ----------------------------------------------------
     http_allowlist: tuple[str, ...] = ()   # empty = allow any host
@@ -195,6 +196,7 @@ class Settings:
                     "OMNIFORGE_PLUGIN_PERMISSIONS", "net.read,fs.write,github.read"
                 ).split(",") if p.strip()
             ),
+            moderation_llm=_bool("OMNIFORGE_MODERATION_LLM", False),
             alert_email=os.getenv("OMNIFORGE_ALERT_EMAIL", ""),
             alert_on_failure=_bool("OMNIFORGE_ALERT_ON_FAILURE", True),
             moderation_enabled=_bool("OMNIFORGE_MODERATION_ENABLED", True),
