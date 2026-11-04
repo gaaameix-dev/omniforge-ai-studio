@@ -216,6 +216,19 @@ CREATE TABLE IF NOT EXISTS project_members (
     created_at TEXT NOT NULL,
     PRIMARY KEY (project_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id               TEXT PRIMARY KEY,
+    name             TEXT NOT NULL,
+    metric           TEXT NOT NULL,
+    comparator       TEXT NOT NULL,
+    threshold        REAL NOT NULL,
+    channel          TEXT NOT NULL,
+    target           TEXT,
+    cooldown_seconds INTEGER NOT NULL DEFAULT 3600,
+    enabled          INTEGER NOT NULL DEFAULT 1,
+    last_fired_at    TEXT,
+    created_at       TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS plugins (
     id           TEXT PRIMARY KEY,
     name         TEXT NOT NULL,
@@ -944,6 +957,43 @@ class RunStore:
             ],
         }
 
+    # ----------------------------------------------------------- alert rules
+    def add_alert_rule(self, data: dict[str, Any]) -> dict:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO alert_rules (id, name, metric, comparator, threshold, channel, target, "
+                "cooldown_seconds, enabled, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (data["id"], data["name"], data["metric"], data["comparator"],
+                 float(data["threshold"]), data["channel"], data.get("target"),
+                 (3600 if data.get("cooldown_seconds") is None
+                  else int(data["cooldown_seconds"])),
+                 int(data.get("enabled", 1)),
+                 data["created_at"]),
+            )
+            self._conn.commit()
+        return data
+
+    def list_alert_rules(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM alert_rules ORDER BY created_at").fetchall()
+        return [dict(r) for r in rows]
+
+    def get_alert_rule(self, rule_id: str) -> dict | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM alert_rules WHERE id=?", (rule_id,)).fetchone()
+        return dict(row) if row else None
+
+    def delete_alert_rule(self, rule_id: str) -> int:
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM alert_rules WHERE id=?", (rule_id,))
+            self._conn.commit()
+            return cur.rowcount
+
+    def touch_alert_rule(self, rule_id: str, ts: str) -> None:
+        with self._lock:
+            self._conn.execute("UPDATE alert_rules SET last_fired_at=? WHERE id=?", (ts, rule_id))
+            self._conn.commit()
+
     # --------------------------------------------------------------- plugins
     def add_plugin(self, data: dict[str, Any]) -> dict:
         with self._lock:
@@ -1011,6 +1061,14 @@ class RunStore:
         with self._lock:
             row = self._conn.execute("SELECT * FROM files WHERE id=?", (file_id,)).fetchone()
         return dict(row) if row else None
+
+    def update_file_meta(self, file_id: str, size: int, sha256: str) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE files SET bytes=?, sha256=? WHERE id=?", (int(size), sha256, file_id)
+            )
+            self._conn.commit()
+            return cur.rowcount
 
     def delete_file(self, file_id: str) -> int:
         with self._lock:
