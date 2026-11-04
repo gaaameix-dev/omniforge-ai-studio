@@ -1,0 +1,20 @@
+services:
+  omniforge:
+    build: .
+    image: omniforge-ai-studio:0.6.0
+    ports:
+      - "8000:8000"
+    environment:
+      OMNIFORGE_MOCK_LLM: "${OMNIFORGE_MOCK_LLM:-true}"
+      OMNIFORGE_LLM_API_KEY: "${OMNIFORGE_LLM_API_KEY:-}"
+      OMNIFORGE_LLM_MODEL: "${OMNIFORGE_LLM_MODEL:-gpt-4o-mini}"
+      OMNIFORGE_LLM_BASE_URL: "${OMNIFORGE_LLM_BASE_URL:-https://api.openai.com/v1}"
+      OMNIFORGE_MAX_PARALLEL: "4"
+      OMNIFORGE_REQUIRE_APPROVAL: "false"
+      OMNIFORGE_API_KEY: "${OMNIFORGE_API_KEY:-}"
+    volumes:
+      - omniforge-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  omniforge-data:
