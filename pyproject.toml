@@ -1,6 +1,6 @@
 [project]
 name = "omniforge-ai-studio"
-version = "0.6.0"
+version = "0.7.0"
 description = "Universal multi-agent AI platform: orchestrator, 120 agent roles, durable runs, review loop, delegation, MCP, automation, billing, plugins."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,6 +15,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6"]
+# PostgreSQL mirror + the embedded server used to test it
+postgres = ["psycopg[binary]>=3.1", "pgserver>=0.1"]
+# encrypted secrets vault
+vault = ["cryptography>=42"]
 
 [project.scripts]
 omniforge = "omniforge.cli:main"
