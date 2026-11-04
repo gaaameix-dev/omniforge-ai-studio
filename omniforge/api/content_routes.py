@@ -1,6 +1,9 @@
 """Project files, portable export/import, agent scoring, memory, provenance."""
 from __future__ import annotations
 
+import hashlib
+import pathlib
+
 from fastapi import File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -10,6 +13,15 @@ from ..core.auth import Identity, allows
 from ..core.portable import export_project, import_project
 from ..core.uploads import UploadError, delete_upload, read_upload, save_upload
 from . import access
+
+
+class FileUpdateRequest(BaseModel):
+    content: str = Field(max_length=500_000)
+
+
+class SandboxRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=20_000)
+    timeout: float = Field(default=5.0, ge=0.5, le=30.0)
 
 
 class LicenceRequest(BaseModel):
@@ -88,6 +100,29 @@ def register(app, *, orch) -> None:
         return Response(content=data, media_type=record["content_type"] or "application/octet-stream",
                         headers={"Content-Disposition": f'attachment; filename="{record["name"]}"',
                                  "X-Content-SHA256": record["sha256"]})
+
+    @app.patch("/api/files/{file_id}")
+    async def update_file(file_id: str, req: FileUpdateRequest, request: Request) -> dict:
+        """Replace a text file's content in place (editor save)."""
+        identity = _identity(request)
+        _require(identity, "run")
+        record = store().get_file(file_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="file not found")
+        payload = req.content.encode("utf-8")
+        path = pathlib.Path(record["path"]).resolve()
+        if path.parent.name != "uploads":
+            raise HTTPException(status_code=409, detail="this file is not editable in place")
+        try:
+            path.write_bytes(payload)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"could not write file: {exc}") from None
+        digest = hashlib.sha256(payload).hexdigest()
+        store().update_file_meta(file_id, len(payload), digest)
+        store().add_audit(identity.email, "file.updated", file_id, record["name"], None,
+                          auth.utcnow())
+        return {"id": file_id, "name": record["name"], "bytes": len(payload), "sha256": digest,
+                "content_type": record["content_type"]}
 
     @app.delete("/api/files/{file_id}")
     async def delete_file(file_id: str, request: Request) -> dict:
@@ -193,6 +228,36 @@ def register(app, *, orch) -> None:
         store().add_audit(identity.email, "provenance.licence", str(provenance_id), req.licence,
                           None, auth.utcnow())
         return {"id": provenance_id, "licence": req.licence}
+
+    # ------------------------------------------------------------- sandbox
+    @app.get("/api/sandbox")
+    async def sandbox_status(request: Request) -> dict:
+        _require(_identity(request), "read")
+        from ..core.sandbox import sandbox_available
+
+        return {
+            "enabled": bool(settings().allow_code_exec),
+            "available": sandbox_available(),
+            "timeout": settings().sandbox_timeout,
+            "memory_mb": settings().sandbox_memory_mb,
+            "note": "process isolation with rlimits; not a container",
+        }
+
+    @app.post("/api/sandbox/run")
+    async def sandbox_run(req: SandboxRequest, request: Request) -> dict:
+        """Run a snippet in the sandbox. Requires the flag and a manage role."""
+        identity = _identity(request)
+        _require(identity, "manage")
+        if not settings().allow_code_exec:
+            raise HTTPException(status_code=409,
+                                detail="code execution is disabled (OMNIFORGE_ALLOW_CODE_EXEC=true)")
+        from ..core.sandbox import run_python
+
+        result = await run_python(req.code, timeout=min(req.timeout, settings().sandbox_timeout),
+                                  memory_mb=settings().sandbox_memory_mb)
+        store().add_audit(identity.email, "sandbox.run", None,
+                          f"exit={result.exit_code} timed_out={result.timed_out}", None, auth.utcnow())
+        return result.to_dict()
 
     # ---------------------------------------------------------- moderation
     @app.get("/api/moderation")
