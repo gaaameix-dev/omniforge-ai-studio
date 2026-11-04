@@ -30,7 +30,7 @@ def test_health_and_framework(client):
     health = client.get("/api/health").json()
     assert health["status"] == "ok" and health["auth_required"] is False
     framework = client.get("/api/framework").json()
-    assert framework["version"] == "0.6.0"
+    assert framework["version"] == "0.7.0"
     assert framework["counts"]["agents"] == 120
     assert framework["policy"]["max_retries"] >= 0
     assert "storage" in framework and "knowledge" in framework
