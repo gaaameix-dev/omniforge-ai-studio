@@ -1,6 +1,33 @@
 # Changelog
 
-## 0.6.0
+## 0.7.0
+
+Added
+- PostgreSQL mirror: `omniforge db --sync`, `/api/db/sync`, `/api/db/verify`, with a
+  full schema and idempotent upserts. Verified against a real PostgreSQL 16 server
+  in the test suite (embedded PostgreSQL).
+- Alert rules: metric + comparator + threshold + channel + cooldown, evaluated on
+  run completion, with audit rows and an `evaluate` endpoint.
+- Plugin registry index: fetch an HTTPS index, pick the newest version, verify the
+  package checksum, then install through the normal signing and permission checks.
+- Optional LLM content classifier (fails open, skipped in mock mode).
+- Dashboard Workspace view: project files, in-place editor save, upload, and a
+  sandbox runner.
+- Dashboard Builder view: compose tasks, departments, dependencies and conditions,
+  save as a workflow.
+- `PATCH /api/files/{id}` for editor saves; `/api/sandbox` and `/api/sandbox/run`.
+- CLI: `db`, `alerts`.
+- Tests: 264 → 283.
+
+Changed
+- Policy checks are async so the classifier can run before planning.
+- Alerts are evaluated after every run when rules exist.
+
+Fixed
+- A zero-second alert cooldown was being replaced by the 3600s default.
+- `AlertEngine.create` now defaults the channel instead of rejecting a missing one.
+
+## 0.7.0
 
 Added
 - Project-level ACLs: per-project members with roles, enforced on read, run,
@@ -28,7 +55,7 @@ Changed
 Fixed
 - Plugin fetches map network failures to a clean 400 instead of a 500.
 
-## 0.6.0
+## 0.7.0
 
 Added
 - Password reset by email: single-use tokens, no account enumeration, sessions
@@ -70,7 +97,7 @@ Fixed
 - Inbound webhook routes are reachable without a session (the token is the secret).
 - Policy rejections return 400 instead of 500.
 
-## 0.6.0
+## 0.7.0
 
 Added
 - Multi-user identity: PBKDF2 accounts, sessions, logout, password change, account
