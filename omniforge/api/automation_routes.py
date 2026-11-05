@@ -32,6 +32,7 @@ class ScheduleRequest(BaseModel):
     goal: str = ""
     workflow_id: str | None = None
     kind: str = Field(default="interval", pattern="^(interval|daily)$")
+    job: str = Field(default="run", pattern="^(run|backup)$")
     every_seconds: int = Field(default=3600, ge=30)
     at_hour: int | None = Field(default=None, ge=0, le=23)
     at_minute: int | None = Field(default=None, ge=0, le=59)
@@ -198,13 +199,14 @@ def register(app, *, orch) -> None:
     async def create_schedule(req: ScheduleRequest, request: Request) -> dict:
         identity = _identity(request)
         _require(identity, "run")
-        if not req.goal and not req.workflow_id:
+        if req.job == "run" and not req.goal and not req.workflow_id:
             raise HTTPException(status_code=400, detail="a schedule needs a goal or a workflow")
         if req.workflow_id and store().get_workflow(req.workflow_id) is None:
             raise HTTPException(status_code=404, detail="workflow not found")
         data = {
             "name": req.name, "kind": req.kind, "every_seconds": req.every_seconds,
             "at_hour": req.at_hour, "at_minute": req.at_minute, "goal": req.goal,
+            "job": req.job,
             "workflow_id": req.workflow_id, "project_id": req.project_id,
             "created_at": utcnow(), "owner_id": identity.user_id,
         }
@@ -251,12 +253,15 @@ def register(app, *, orch) -> None:
         return {"deleted": deleted}
 
     @app.post("/api/schedules/tick", status_code=200)
-    async def tick(request: Request) -> dict:
-        """Run one scheduler pass now (useful for cron-less deployments and tests)."""
+    async def tick(request: Request, now: str | None = None) -> dict:
+        """Run one scheduler pass now (useful for cron-less deployments and tests).
+
+        `now` lets an operator replay a pass at a specific ISO timestamp.
+        """
         identity = _identity(request)
         _require(identity, "manage")
         engine = scheduler() or Scheduler(orch(), store(), tick_seconds=0)
-        fired = await engine.tick_once()
+        fired = await engine.tick_once(now=now)
         return {"fired": fired, "count": len(fired)}
 
     # ------------------------------------------------------- notifications
