@@ -72,6 +72,9 @@ class Orchestrator:
         self.billing = billing
         self.mailer = mailer
         self.alerts = alerts
+        from .tracing import Tracer
+
+        self.tracer = Tracer(otel=bool(getattr(settings, "otel", False)))
         self.llm_moderator = LlmModerator(
             llm, enabled=bool(getattr(settings, "moderation_llm", False))
         )
@@ -120,7 +123,7 @@ class Orchestrator:
     def describe(self) -> dict[str, Any]:
         return {
             "framework": "OmniForge AI Studio",
-            "version": "1.1.0",
+            "version": "1.2.0",
             "backend": self.llm.name,
             "live_mode": self.settings.live_mode,
             "departments": [
@@ -772,6 +775,11 @@ class Orchestrator:
 
     # ------------------------------------------------------------- execution
     async def _execute_task(self, run: Run, task: Task, budget: Budget) -> bool:
+        with self.tracer.span("task", run_id=run.id, task=task.title,
+                              department=task.department, skill=task.skill):
+            return await self._execute_task_inner(run, task, budget)
+
+    async def _execute_task_inner(self, run: Run, task: Task, budget: Budget) -> bool:
         """True = task reached a terminal state; False = it failed permanently."""
         assert run.plan is not None
         by_id = run.plan.by_id()
