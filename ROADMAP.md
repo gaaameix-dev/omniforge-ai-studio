@@ -6,7 +6,7 @@ credential is missing, the line says so.
 
 Legend: **I** implemented · **T** tested · **C** connected here · **P** partial · **N** pending
 
-Counts at this build: 483 automated tests · 83% line coverage · 51 shipped skills · 120 agent roles ·
+Counts at this build: 496 automated tests · 83% line coverage · 51 shipped skills · 120 agent roles ·
 15 built-in tools · 10 departments · 11 dashboard views.
 
 ---
@@ -58,6 +58,15 @@ Everything below was previously PENDING or PARTIAL and is now working and tested
 | **Queue-backed workers** | I · T | `core/worker.py`, `omniforge worker`, lease claim |
 | **All 51 skills deterministic** | I · T | `skills/generators.py`; every skill works offline |
 | Generator/model switch | I · T | `OMNIFORGE_PREFER_GENERATORS` |
+| **Token streaming** | I · T | `agent.token` events + live UI |
+| **Task-level cancel** | I · T | `cancel_task`, API endpoint |
+| **DB-backed settings + screen** | I · T | `/api/settings`, Settings view |
+| **Per-team alert routing** | I · T | `alert_routes` |
+| **Marketplace index + export** | I · T | `/api/plugins/index`, `/export` |
+| **Bulk knowledge import** | I · T | `/api/knowledge/import` |
+| **Speech generation** | I · T (needs key) | `/api/media/speech` |
+| **Workflow dependency graph** | I · T (structure) | SVG in the Builder view |
+| **Release workflow** | I · C (config) | `.github/workflows/release.yml` |
 | Alert rules (metric/threshold/cooldown) | I · T · C | `core/alerts.py`, `/api/alert-rules` |
 | Plugin registry index | I · T | `core/plugin_registry.py`, checksum verified |
 | LLM content classifier | I · T (needs key) | `LlmModerator`, off by default |
@@ -263,7 +272,7 @@ Everything below was previously PENDING or PARTIAL and is now working and tested
 
 | Item | Why it is open |
 |---|---|
-| Video / audio / 3D generation | needs providers; image generation is wired |
+| Video / music / 3D generation | needs providers; image and speech are wired |
 | Vector embeddings | hybrid BM25 + cosine shipped; a dedicated vector DB is still open |
 | External broker (Redis/SQS) | workers now claim from the database; a broker is only needed beyond one database |
 | Hosted plugin registry service | index format + checksum verification shipped; hosting one is an ops task |
