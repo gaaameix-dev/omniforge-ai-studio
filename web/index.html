@@ -127,8 +127,9 @@
 <a href="#main" class="skip" data-i18n="a11y.skip">Skip to content</a>
 <header>
   <span class="dot"></span>
-  <h1>OmniForge <small id="ver">v0.3</small></h1>
+  <h1>OmniForge <small id="ver">v1.2</small></h1>
   <span class="badge" id="backend">-</span>
+  <span class="badge" id="queue-badge"></span>
   <div class="hstats">
     <span class="badge" id="s-agents">-</span>
     <span class="badge" id="s-skills">-</span>
@@ -697,7 +698,10 @@ $("sec-add").onclick = async () => {
     await api("/api/secrets", {method:"POST", body: JSON.stringify({name, value})});
     $("sec-name").value = ""; $("sec-value").value = "";
     toast("secret stored"); loadSecurity();
-  }catch(e){ toast(e.message); }
+  }catch(e){
+    if (!navigator.onLine) { enqueueOffline(payload); return; }
+    toast(e.message);
+  }
 };
 
 async function deleteSecret(name){
@@ -1088,6 +1092,48 @@ async function deleteRoute(team){
   try{ await api("/api/alert-routes/" + encodeURIComponent(team), {method:"DELETE"}); loadSettings(); }
   catch(e){ toast(e.message); }
 }
+
+
+/* -------------------------------------------------------- offline queue */
+const QUEUE_KEY = "omniforge.queue";
+
+function readQueue(){
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); }
+  catch (e) { return []; }
+}
+
+function writeQueue(items){
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(items));
+  const badge = $("queue-badge");
+  if (badge) badge.textContent = items.length ? `${items.length} queued` : "";
+}
+
+function enqueueOffline(payload){
+  const items = readQueue();
+  items.push({payload, at: new Date().toISOString()});
+  writeQueue(items);
+  toast("offline: instruction queued (" + items.length + ")");
+}
+
+async function flushQueue(){
+  const items = readQueue();
+  if (!items.length) return;
+  const remaining = [];
+  for (const item of items) {
+    try {
+      await api("/api/runs", {method: "POST", body: JSON.stringify(item.payload)});
+    } catch (e) {
+      remaining.push(item);
+    }
+  }
+  writeQueue(remaining);
+  if (items.length !== remaining.length) {
+    toast("sent " + (items.length - remaining.length) + " queued instruction(s)");
+    loadRuns && loadRuns();
+  }
+}
+
+window.addEventListener("online", () => { flushQueue(); });
 
 /* ---------------------------------------------------------- workspace */
 let wsProject = "", wsFile = null;
