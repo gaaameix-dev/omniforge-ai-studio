@@ -231,6 +231,17 @@ CREATE TABLE IF NOT EXISTS alert_routes (
     target   TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS oidc_states (
+    state      TEXT PRIMARY KEY,
+    verifier   TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS leases (
+    name       TEXT PRIMARY KEY,
+    owner      TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS settings_overrides (
     key        TEXT PRIMARY KEY,
     value      TEXT NOT NULL,
@@ -1101,6 +1112,61 @@ class RunStore:
             cur = self._conn.execute("DELETE FROM alert_routes WHERE team=?", (team,))
             self._conn.commit()
             return cur.rowcount
+
+    # ------------------------------------------------------------ oidc states
+    def save_oidc_state(self, state: str, verifier: str, ts: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO oidc_states (state, verifier, created_at) VALUES (?,?,?) "
+                "ON CONFLICT(state) DO UPDATE SET verifier=excluded.verifier",
+                (state, verifier, ts),
+            )
+            self._conn.commit()
+
+    def take_oidc_state(self, state: str) -> str | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT verifier FROM oidc_states WHERE state=?", (state,)
+            ).fetchone()
+            if row:
+                self._conn.execute("DELETE FROM oidc_states WHERE state=?", (state,))
+                self._conn.commit()
+        return row["verifier"] if row else None
+
+    # ---------------------------------------------------------------- leases
+    def acquire_lease(self, name: str, owner: str, expires_at: str, now: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO leases (name, owner, expires_at, updated_at) VALUES (?,?,?,?) "
+                "ON CONFLICT(name) DO UPDATE SET owner=excluded.owner, "
+                "expires_at=excluded.expires_at, updated_at=excluded.updated_at "
+                "WHERE leases.expires_at < ? OR leases.owner = ?",
+                (name, owner, expires_at, now, now, owner),
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def renew_lease(self, name: str, owner: str, expires_at: str, now: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE leases SET expires_at=?, updated_at=? WHERE name=? AND owner=?",
+                (expires_at, now, name, owner),
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def release_leader(self, name: str, owner: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM leases WHERE name=? AND owner=?", (name, owner)
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def get_lease(self, name: str) -> dict | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM leases WHERE name=?", (name,)).fetchone()
+        return dict(row) if row else None
 
     # --------------------------------------------------------------- plugins
     def add_plugin(self, data: dict[str, Any]) -> dict:
