@@ -1,7 +1,7 @@
 # OmniForge AI Studio
 
 [![ci](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-356-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-483-brightgreen)](tests/)
 [![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -46,7 +46,7 @@ omniforge eval                # 5 end-to-end eval cases
 omniforge demo                # two goals, printed plan by plan
 omniforge serve               # dashboard + API on http://127.0.0.1:8000
 omniforge run "Build a 2D mobile puzzle game with 20 levels and a leaderboard"
-pytest -q                     # 356 tests, ~3m
+pytest -q                     # 483 tests, ~2m20s
 ```
 
 Live model (any OpenAI-compatible endpoint: OpenAI, Azure, Groq, Together,
@@ -114,6 +114,21 @@ tool should.
 | PostgreSQL mirror | `omniforge db --sync postgresql://…` copies runs, tasks, events, documents, usage, audit and tool calls into PostgreSQL for SQL reporting; verified against PostgreSQL 16 |
 | Workspace editor | dashboard Workspace view: upload, edit and save project files, then run Python in the sandbox |
 | Workflow builder | dashboard Builder view: compose tasks, departments, dependencies and conditions, then save as a reusable workflow |
+
+## Skills without a model
+
+All 51 shipped skills have a deterministic implementation in `skills/generators.py`:
+each one turns the goal plus upstream context into a structured artifact - a spec,
+a table, a checklist or a code skeleton - with no model call at all. That means a
+run in mock mode still produces real deliverables instead of placeholders.
+
+```bash
+omniforge run "Build a 2D mobile puzzle game"   # real artifacts, no API key
+```
+
+Generators are scaffolding, not expertise: budgets and targets are labelled defaults
+you should tune. With a live model you can flip the choice with
+`OMNIFORGE_PREFER_GENERATORS=false`, which sends the prompt path instead.
 
 ## Scale-out and generation
 
@@ -304,6 +319,7 @@ curl -s localhost:8000/api/runs -H 'content-type: application/json' \
 | `OMNIFORGE_DB_URL` | empty (SQLite) | `sqlite:///path` or `postgresql://…` |
 | `OMNIFORGE_WORKER_MODE` | `false` | enqueue runs instead of running them inline |
 | `OMNIFORGE_DEBATE_CANDIDATES` | `1` | candidates per task (debate) |
+| `OMNIFORGE_PREFER_GENERATORS` | `true` | use the deterministic skill implementation instead of the model |
 | `OMNIFORGE_MEDIA_API_KEY` · `_MEDIA_MODEL` | empty · `gpt-image-1` | image generation |
 | `OMNIFORGE_PROVIDER_BUDGETS` | empty | `openai:5,anthropic:10` USD per month |
 | `ANTHROPIC_API_KEY` · `GEMINI_API_KEY` · `OMNIFORGE_LLM_PROVIDER` · `_LLM_FALLBACK` | empty · empty · `openai` · empty | providers |
@@ -350,7 +366,7 @@ omniforge/
           content_routes · platform_routes
   cli.py
 web/index.html           dashboard v3 (mobile-first)
-tests/                   356 tests
+tests/                   483 tests
 docs/ARCHITECTURE.md     layers, invariants, state machine, extension points
 docs/SECURITY.md         operator security checklist
 docs/TROUBLESHOOTING.md  setup and failure playbook
@@ -362,7 +378,7 @@ ROADMAP.md               item-by-item status for both production addenda
 ## Testing and evals
 
 ```bash
-pytest -q          # 356 tests
+pytest -q          # 483 tests
 omniforge eval     # 5 goal-level cases with explicit checks
 ruff check .       # lint
 ```
