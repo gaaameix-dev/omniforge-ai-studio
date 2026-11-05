@@ -144,6 +144,12 @@ views, 126 i18n keys (en/hi), 5/5 eval cases.
 | Settings screen (DB-backed config) | Yes | Yes | Yes | `/api/settings`, 11 tunable keys, applies live |
 | Docker image / PyPI release | Configured | Workflow only | Not published | `.github/workflows/release.yml` builds the wheel and pushes to GHCR on a tag; publishing needs registry secrets |
 
+## Backlog
+
+Everything still missing is listed with the exact blocker and a size estimate in
+[`docs/REMAINING.md`](docs/REMAINING.md). That file is the single backlog: never built,
+built-but-limited, code-ready-waiting-on-a-credential, and deliberate non-goals.
+
 ## How to check all of this yourself
 
 ```bash
