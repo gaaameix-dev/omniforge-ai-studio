@@ -29,6 +29,12 @@ class ImageRequest(BaseModel):
     size: str = "1024x1024"
 
 
+class SpeechRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+    voice: str = "alloy"
+    fmt: str = "mp3"
+
+
 class ScaffoldRequest(BaseModel):
     engine: str
     name: str = "MyGame"
@@ -301,6 +307,28 @@ def register(app, *, orch) -> None:
         store().add_audit(identity.email, "media.image", name, f"{len(payload)}b", None,
                           auth.utcnow())
         return {"file": name, "bytes": len(payload), "prompt": req.prompt, "size": req.size}
+
+    @app.post("/api/media/speech")
+    async def media_speech(req: SpeechRequest, request: Request) -> dict:
+        identity = _identity(request)
+        _require(identity, "run")
+        from ..core.media import MediaError, SpeechProvider
+
+        provider = SpeechProvider(settings().media_api_key, base_url=settings().media_base_url)
+        if not provider.enabled:
+            raise HTTPException(status_code=409,
+                                detail="speech generation needs OMNIFORGE_MEDIA_API_KEY")
+        try:
+            payload = await provider.speak(req.text, voice=req.voice, fmt=req.fmt)
+        except MediaError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from None
+        folder = pathlib.Path(settings().data_dir) / "generated"
+        folder.mkdir(parents=True, exist_ok=True)
+        name = f"speech_{auth.utcnow().replace(':', '').replace('-', '')}.{req.fmt}"
+        (folder / name).write_bytes(payload)
+        store().add_audit(identity.email, "media.speech", name, f"{len(payload)}b", None,
+                          auth.utcnow())
+        return {"file": name, "bytes": len(payload), "voice": req.voice}
 
     # ------------------------------------------------------------ engines
     @app.get("/api/engines")
