@@ -87,6 +87,15 @@ def register(app, *, orch) -> None:
         _require(_identity(request), "read")
         return billing().estimate(req.goal, tasks=req.tasks, model=req.model)
 
+    @app.get("/api/billing/providers")
+    async def provider_usage(request: Request) -> dict:
+        _require(_identity(request), "read")
+        return {
+            "providers": billing().provider_usage(),
+            "budgets": getattr(settings(), "provider_budgets", {}),
+            "note": "budgets are USD per calendar month; 0/absent means unlimited",
+        }
+
     @app.get("/api/billing/quota")
     async def quota(request: Request) -> dict:
         identity = _identity(request)
