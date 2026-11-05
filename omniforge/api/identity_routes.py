@@ -6,6 +6,7 @@ here is a real database operation - nothing is a placeholder.
 from __future__ import annotations
 
 import logging
+import secrets
 from typing import Any
 
 from fastapi import HTTPException, Request
@@ -230,6 +231,55 @@ def register(app, *, orch) -> None:
         store().delete_mfa(user["id"])
         store().add_audit(user["email"], "auth.mfa_disabled", user["id"], None, None, auth.utcnow())
         return {"enabled": False}
+
+    @app.get("/api/auth/oidc/login")
+    async def oidc_login(request: Request) -> dict:
+        from ..core.oidc import OIDCClient, OIDCError
+
+        cfg = settings()
+        client = OIDCClient(cfg.oidc_issuer, cfg.oidc_client_id, cfg.oidc_client_secret,
+                            cfg.oidc_redirect_uri,
+                            transport=getattr(app.state, "oidc_transport", None))
+        if not client.enabled:
+            raise HTTPException(status_code=409,
+                                detail="OIDC is not configured (OMNIFORGE_OIDC_ISSUER / _CLIENT_ID)")
+        state = "ofs_" + secrets.token_urlsafe(24)
+        verifier, challenge = client.new_pkce()
+        store().save_oidc_state(state, verifier, auth.utcnow())
+        try:
+            url = await client.authorization_url(state, challenge)
+        except OIDCError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from None
+        return {"authorization_url": url, "state": state}
+
+    @app.get("/api/auth/oidc/callback")
+    async def oidc_callback(request: Request, code: str, state: str) -> dict:
+        from ..core.oidc import OIDCClient, OIDCError
+
+        cfg = settings()
+        verifier = store().take_oidc_state(state)
+        if not verifier:
+            raise HTTPException(status_code=400, detail="unknown or expired state")
+        client = OIDCClient(cfg.oidc_issuer, cfg.oidc_client_id, cfg.oidc_client_secret,
+                            cfg.oidc_redirect_uri,
+                            transport=getattr(app.state, "oidc_transport", None))
+        try:
+            identity_info = await client.identify(code, verifier)
+        except OIDCError as exc:
+            store().add_audit(None, "auth.oidc_failed", None, str(exc), None, auth.utcnow())
+            raise HTTPException(status_code=401, detail=str(exc)) from None
+
+        user = store().get_user_by_email(identity_info["email"])
+        if user is None:
+            # an OIDC account has no local password; a random one is stored unhashed-safe
+            user = auth.register_user(store(), identity_info["email"],
+                                      secrets.token_urlsafe(32), identity_info["name"])
+        if user.get("disabled"):
+            raise HTTPException(status_code=403, detail="this account is disabled")
+        token = auth.issue_session(store(), settings(), user)
+        store().add_audit(identity_info["email"], "auth.oidc_login", None,
+                          identity_info["subject"], None, auth.utcnow())
+        return {"token": token, "user": {k: user[k] for k in ("id", "email", "name", "role")}}
 
     @app.post("/api/auth/logout")
     async def logout(request: Request) -> dict:
