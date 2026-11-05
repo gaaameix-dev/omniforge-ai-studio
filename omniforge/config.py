@@ -79,6 +79,7 @@ class Settings:
     # --- debate ------------------------------------------------------------
     debate_candidates: int = 1           # >1 = run N candidates, keep the best
     prefer_generators: bool = True       # deterministic artifact over a model call
+    stream_tokens: bool = True           # emit agent.token events while a model writes
 
     # --- media -------------------------------------------------------------
     media_api_key: str = ""              # image generation (OpenAI-compatible)
@@ -195,6 +196,7 @@ class Settings:
             fail_fast=_bool("OMNIFORGE_FAIL_FAST", True),
             debate_candidates=_int("OMNIFORGE_DEBATE_CANDIDATES", 1),
             prefer_generators=_bool("OMNIFORGE_PREFER_GENERATORS", True),
+            stream_tokens=_bool("OMNIFORGE_STREAM_TOKENS", True),
             media_api_key=os.getenv("OMNIFORGE_MEDIA_API_KEY", "")
             or os.getenv("OPENAI_API_KEY", ""),
             media_base_url=os.getenv("OMNIFORGE_MEDIA_BASE_URL", "https://api.openai.com/v1"),
