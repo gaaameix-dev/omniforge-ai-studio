@@ -27,6 +27,19 @@ def _float(name: str, default: float) -> float:
         return default
 
 
+def _parse_budgets(raw: str) -> dict:
+    """'openai:5,anthropic:10' -> {'openai': 5.0, 'anthropic': 10.0} (USD per month)."""
+    budgets: dict = {}
+    for chunk in (raw or "").split(","):
+        name, _, value = chunk.partition(":")
+        try:
+            if name.strip() and value.strip():
+                budgets[name.strip().lower()] = float(value)
+        except ValueError:
+            continue
+    return budgets
+
+
 def _parse_prices(raw: str) -> dict:
     """'gpt-4o:2.5:10,claude:3:15' -> {'gpt-4o': [2.5, 10], ...} ($ per 1M tokens)."""
     prices: dict = {}
@@ -62,6 +75,14 @@ class Settings:
     max_tasks_per_run: int = 40          # guard against runaway delegation
     run_timeout: float = 0.0             # 0 disables the wall-clock cap
     fail_fast: bool = True               # stop the run when a task fails for good
+
+    # --- debate ------------------------------------------------------------
+    debate_candidates: int = 1           # >1 = run N candidates, keep the best
+
+    # --- media -------------------------------------------------------------
+    media_api_key: str = ""              # image generation (OpenAI-compatible)
+    media_base_url: str = "https://api.openai.com/v1"
+    media_model: str = "gpt-image-1"
 
     # --- review loop -------------------------------------------------------
     review_enabled: bool = True
@@ -112,6 +133,8 @@ class Settings:
 
     # --- billing -----------------------------------------------------------
     user_monthly_tokens: int = 0         # 0 = no quota
+    provider_budgets: dict = field(default_factory=dict)  # {"openai": 5.0, ...} USD/month
+    worker_mode: bool = False            # enqueue runs instead of executing in-process
     model_prices: dict = field(default_factory=dict)   # {"model-prefix": [in_per_1m, out_per_1m]}
 
     # --- retrieval ---------------------------------------------------------
@@ -169,6 +192,11 @@ class Settings:
             max_tasks_per_run=_int("OMNIFORGE_MAX_TASKS", 40),
             run_timeout=_float("OMNIFORGE_RUN_TIMEOUT", 0.0),
             fail_fast=_bool("OMNIFORGE_FAIL_FAST", True),
+            debate_candidates=_int("OMNIFORGE_DEBATE_CANDIDATES", 1),
+            media_api_key=os.getenv("OMNIFORGE_MEDIA_API_KEY", "")
+            or os.getenv("OPENAI_API_KEY", ""),
+            media_base_url=os.getenv("OMNIFORGE_MEDIA_BASE_URL", "https://api.openai.com/v1"),
+            media_model=os.getenv("OMNIFORGE_MEDIA_MODEL", "gpt-image-1"),
             review_enabled=_bool("OMNIFORGE_REVIEW_ENABLED", True),
             review_min_chars=_int("OMNIFORGE_REVIEW_MIN_CHARS", 40),
             review_with_llm=_bool("OMNIFORGE_REVIEW_WITH_LLM", False),
@@ -183,6 +211,8 @@ class Settings:
             sandbox_timeout=_float("OMNIFORGE_SANDBOX_TIMEOUT", 5.0),
             sandbox_memory_mb=_int("OMNIFORGE_SANDBOX_MEMORY_MB", 256),
             user_monthly_tokens=_int("OMNIFORGE_USER_MONTHLY_TOKENS", 0),
+            provider_budgets=_parse_budgets(os.getenv("OMNIFORGE_PROVIDER_BUDGETS", "")),
+            worker_mode=_bool("OMNIFORGE_WORKER_MODE", False),
             model_prices=_parse_prices(os.getenv("OMNIFORGE_MODEL_PRICES", "")),
             embedding_api_key=os.getenv("OMNIFORGE_EMBEDDING_API_KEY", "")
             or os.getenv("OPENAI_API_KEY", ""),
