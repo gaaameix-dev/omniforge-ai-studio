@@ -1,91 +1,88 @@
 # What is not done yet
 
-Honest backlog for OmniForge AI Studio 1.1.0. Every line was checked against the
+Honest backlog for OmniForge AI Studio 1.2.0. Every line was checked against the
 code at this commit.
 
 Legend **Needs**: `key` = paid credential · `hardware` = device or farm · `ops` =
 hosted service/registry · `decision` = a product choice · `—` = just work.
 Size: **S** < 1 day · **M** a few days · **L** a week+.
 
-Baseline: 51/51 skills deterministic · 120 agent roles · 16 tools · 149 HTTP routes ·
-14 dashboard views · 28 CLI commands · 513 tests.
+Baseline: 51/51 skills deterministic · 120 agent roles · 16 tools · 157 HTTP routes ·
+14 dashboard views · 29 CLI commands · 537 tests.
 
 ---
 
-## Closed in 1.1.0 (was on this list)
+## Closed in 1.2.0
 
 | Was | Item | What changed |
 |---|---|---|
-| A6 | Drag-to-arrange canvas | Builder graph nodes are draggable (pointer events); positions kept while you edit |
-| B1 | Settings coverage | 24 runtime-tunable keys (was 11), including `http_allowlist`, `cors_origins`, `run_timeout`, `alert_on_failure`, `debate_judge` |
-| B2 | Accessibility | `aria-live` on the live output and event log, `role="status"`, labelled nav, visible focus ring |
-| B4 | Backup scheduling | `job: "backup"` schedules create a verified archive on their own tick |
-| B5 | Alert routing | Rules carry `severity` (info/warning/critical) and quiet hours; critical bypasses quiet hours; per-team routes |
-| B6 | Knowledge import | `/api/knowledge/import-file` accepts `.txt/.md/.csv/.json/.zip` with per-file skip reasons |
-| B8 | Debate judge | A model picks the winning candidate when `DEBATE_JUDGE` is on; review score remains the fallback |
-| B9 | Review rubric | Skills carry `min_words` and `must_contain`; missing rubric terms are critical |
-| B10 | Delegation budget | Delegation is refused once 90% of the run budget is spent |
-| B11 | Streaming | The handoff summary streams too (`run.token`); WS client reconnects |
-| B12 | Plugin trust | Ed25519 public-key signatures plus a revocation list enforced at install |
-| B14 | Cost hard stop | The provider cap is checked inside the run loop, so a run stops mid-flight |
-| B16 | CLI | `run --watch` streams tokens and events; `omniforge completions bash|zsh` |
+| A1 | Video generation | `core/media_jobs.py` job-API adapter + `POST /api/media/job?kind=video`; tested against a mock provider |
+| A2 | Music generation | same adapter, `kind=music` |
+| A3 | 3D generation | same adapter with a glTF/GLB validator before the asset is stored |
+| A4 | Engine build | `core/engine_build.py` runs a configured engine CLI with timeout and log capture; `GET /api/engines/availability`, `POST /api/engines/build` |
+| A7 | External broker | `core/broker.py`: database broker (default) + Redis broker with leases and expired-lease requeue; worker uses it when `OMNIFORGE_BROKER_URL` is set |
+| A8 | HA building block | Leader lease (`core/leader.py`, one conditional UPDATE) gates the scheduler; `GET /api/ready` for a load balancer |
+| A9 | Per-tenant isolation | Schema-per-tenant for PostgreSQL (`core/tenancy.py`, `OMNIFORGE_TENANT`, `/api/tenants`), tested against a real server |
+| B13 | Marketplace hosting | `omniforge plugins --index --base-url` prints a ready-to-host index; export endpoint already existed |
+| B15 | Observability | Span tracer with per-task durations and `/api/traces`, optional OpenTelemetry bridge (`OMNIFORGE_OTEL`) |
+| D1 | SSO / OIDC | Generic OIDC login with PKCE (`core/oidc.py`, `/api/auth/oidc/login|callback`) |
+| D5 | Offline UI queue | Dashboard queues an instruction in `localStorage` when offline and flushes it on reconnect |
 
-## A. Never built — blocked by a provider, hardware or a decision
+Closed in 1.1.0: review rubric, mid-run cost stop, delegation budget, backup
+schedules, import formats, alert severity/quiet hours, Ed25519 plugin signing +
+revocation, debate judge, streamed summary, 24 tunable settings, CLI watch and
+completions, draggable graph, accessibility pass.
+
+## A. Never built — still blocked
 
 | # | Item | Current state | What is missing | Needs | Size |
 |---|---|---|---|---|---|
-| A1 | Video generation | `/api/media` reports `video_generation: false` | Adapter to a video model, job polling, artifact handling | key | M |
-| A2 | Music generation | `music_generation: false` | Adapter to a music model plus licence metadata | key | M |
-| A3 | 3D model generation | `model_3d_generation: false` | Text/image-to-mesh provider or a Blender headless pipeline, plus a glTF validator | key / hardware | L |
-| A4 | Real engine import/build | `core/engines.py` writes text skeletons | Engine CLI invocation, asset import, build + log parsing | hardware | L |
-| A5 | Physical Android/iOS testing | CSS-verified only | Device or browser farm in CI | hardware / key | M |
-| A7 | External broker (Redis/SQS) | Workers claim from the database | Broker integration; only needed beyond one database | decision | M |
-| A8 | Multi-region / HA | Single process, one database | Replication, leader election, failover, LB config | ops | L |
-| A9 | Per-tenant isolation | Shared tables with `workspace_id` | Schema-per-tenant or row-level security, plus migrations | decision | L |
+| A5 | Physical Android/iOS testing | CSS + structural checks only | A device or browser farm in CI; the dashboard is responsive but untested on hardware | hardware / key | M |
+| A6 | Engine *runs* without the engine | Build command wired, availability reported | An installed Unity/Unreal/Godot to actually compile a scaffold | hardware | L |
+| A10 | Multi-region replication | Leader lease + readiness done | Database replication, cross-region failover, traffic policy | ops | L |
 
 ## B. Built, but limited
 
 | # | Item | Current state | What is missing | Needs | Size |
 |---|---|---|---|---|---|
-| B3 | Mobile layout | 6 media queries, mobile-first CSS, safe areas not handled | Real-device checks (see A5) and iOS safe-area insets | hardware | S |
-| B7 | Retrieval | Hybrid BM25 + cosine over SQLite vectors | A vector database, ANN index, re-embedding on model change | decision | M |
-| B13 | Marketplace | Index + package export + revocations | A hosted index with review, ratings and per-project pinning | ops | M |
-| B15 | Observability | Prometheus text, JSON monitor, per-task events | OpenTelemetry spans, log shipping config, SLO dashboards | decision | M |
-| B17 | Settings coverage, remaining | 24 of 74 keys are tunable | The rest are credentials and paths that should stay env-only | — | — |
+| B3 | Mobile layout | 6 media queries, mobile-first CSS | Safe-area insets and real-device verification (see A5) | hardware | S |
+| B7 | Retrieval | Hybrid BM25 + cosine over SQLite vectors | A vector database with an ANN index; re-embedding on model change | decision | M |
+| B18 | Tracing depth | Task-level spans | Tool-level and LLM-call spans, sampling, an OTel collector config | — | S |
+| B19 | Settings coverage | 24 of 78 keys are tunable | The rest are credentials and paths that should stay env-only | — | — |
 
 ## C. Code ready — waiting on credentials or infrastructure
 
 | # | Item | Current state | What is missing | Needs | Size |
 |---|---|---|---|---|---|
-| C1 | Live model | Adapters tested against mock transports | A provider key, then one smoke run per provider | key | S |
-| C2 | Image + speech | Endpoints implemented, tested with mocks | `OMNIFORGE_MEDIA_API_KEY`; verify one real image and clip | key | S |
-| C3 | Embeddings | Hybrid search implemented, 409 without a key | `OMNIFORGE_EMBEDDING_API_KEY`, then re-embed | key | S |
-| C4 | GitHub writes | Commit/branch/PR/issue/workflow tools | A token with `repo` scope on a scratch repository | key | S |
-| C5 | MCP servers | stdio + HTTP clients, fake-server tests | Point at a real MCP server and record its tool list | ops | S |
-| C6 | Email | Console backend, SMTP client implemented | SMTP credentials + deliverability check | key | S |
-| C7 | Code sandbox | Implemented, off by default | A decision to enable it; a container if you need a real boundary | decision | M |
-| C8 | Docker image | Dockerfile + compose in repo | Build in a Docker-enabled environment and push | ops | S |
-| C9 | PyPI package | `pyproject.toml` + release workflow | `PYPI_API_TOKEN` secret, then tag `v1.1.0` | ops | S |
+| C1 | Live model | Adapters tested against mock transports | A provider key, then one smoke run per provider (`omniforge verify`) | key | S |
+| C2 | Image + speech | Endpoints implemented, mock-tested | `OMNIFORGE_MEDIA_API_KEY`; one real image and clip | key | S |
+| C3 | Video / music / 3D | Job adapter + validator, mock-tested | `OMNIFORGE_MEDIA_JOB_URL` pointing at a shim over your provider | key | S |
+| C4 | Embeddings | Hybrid search implemented | `OMNIFORGE_EMBEDDING_API_KEY`, then re-embed | key | S |
+| C5 | GitHub writes | Tools implemented | A token with `repo` scope on a scratch repo | key | S |
+| C6 | MCP servers | stdio + HTTP clients, fake-server tests | Point at a real MCP server | ops | S |
+| C7 | Email | Console backend, SMTP client | SMTP credentials | key | S |
+| C8 | Code sandbox | Implemented, off by default | Enable it; a container if you need a real boundary | decision | M |
+| C9 | Redis broker | Adapter tested with fakeredis | A Redis instance (`OMNIFORGE_BROKER_URL`) | ops | S |
+| C10 | Docker image | Dockerfile + compose | Build in a Docker-enabled environment, push | ops | S |
+| C11 | PyPI package | Release workflow written | `PYPI_API_TOKEN`, then tag `v1.2.0` | ops | S |
 
 ## D. Not requested, commonly asked for next
 
 | # | Item | Why it is not there | Needs | Size |
 |---|---|---|---|---|
-| D1 | SSO / OIDC login | Local accounts only | decision | M |
-| D2 | SAML / SCIM | Enterprise-only need | decision | L |
+| D2 | SAML / SCIM | OIDC covers most SSO; SCIM is enterprise provisioning | decision | L |
 | D3 | Stripe billing | Usage is metered internally; no invoicing | key | M |
 | D4 | Native mobile app | The web UI is responsive; no shell | — | L |
-| D5 | Offline UI queue | Runs need a live API connection | — | S |
-| D6 | Non-English artifacts | UI is EN/HI; artifacts are English | — | M |
-| D7 | Data residency controls | One database, one region | decision | L |
+| D6 | Non-English artifacts | UI is EN/HI; generators and prompts write English | — | M |
+| D7 | Data residency controls | Tenant schemas exist; region pinning is infra | decision | L |
 | D8 | Fine-tuning pipeline | Training plan generator exists, no pipeline | key | L |
 
 ## E. Deliberate non-goals
 
-- Autonomous deployment to production (destructive tools need an explicit approval flag).
+- Autonomous deployment to production (destructive tools need an explicit approval).
 - A general chat assistant.
 - Model hosting.
-- A security boundary in the sandbox (process isolation with rlimits, documented as such).
+- A security boundary in the sandbox (process isolation with rlimits, documented).
 
 ---
 
@@ -93,10 +90,10 @@ Baseline: 51/51 skills deterministic · 120 agent roles · 16 tools · 149 HTTP 
 
 ```bash
 omniforge doctor                 # environment, integrations, smoke run
-omniforge integrations --verify  # live checks per service
+omniforge verify                 # one live check per configured provider
+omniforge integrations --verify
 curl localhost:8000/api/media    # which media modalities exist
-curl localhost:8000/api/settings # what is tunable at runtime
-curl localhost:8000/api/plugins/revocations
-omniforge eval                   # 5 goal-level cases
-pytest -q                        # 513 tests
+curl localhost:8000/api/ready    # readiness for a load balancer
+curl localhost:8000/api/traces   # span summary
+omniforge eval && pytest -q      # 5 cases, 537 tests
 ```
