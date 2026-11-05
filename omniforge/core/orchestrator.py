@@ -90,6 +90,7 @@ class Orchestrator:
         self._paused.set()               # set == running
         self._stopped = False
         self._checkpoint_seq: dict[str, int] = {}
+        self._cancelled: set[tuple[str, str]] = set()
 
         self.bus.add_listener(self._on_event)
         interrupted = self.store.fail_interrupted()
@@ -104,7 +105,10 @@ class Orchestrator:
 
     def _save(self, run: Run) -> None:
         run.touch()
-        self.store.save_run(run)
+        try:
+            self.store.save_run(run)
+        except Exception as exc:  # noqa: BLE001 - a closing store must not crash a run
+            log.debug("could not persist run %s: %s", run.id, exc)
 
     @property
     def catalog(self) -> dict[str, list[str]]:
@@ -116,7 +120,7 @@ class Orchestrator:
     def describe(self) -> dict[str, Any]:
         return {
             "framework": "OmniForge AI Studio",
-            "version": "0.9.0",
+            "version": "1.0.0",
             "backend": self.llm.name,
             "live_mode": self.settings.live_mode,
             "departments": [
@@ -378,6 +382,35 @@ class Orchestrator:
             data["budget"] = self._budgets[run_id].snapshot() if run_id in self._budgets else None
             return data
         return self.store.get_run(run_id)
+
+    async def cancel_task(self, run_id: str, task_id: str,
+                          reason: str = "cancelled by operator") -> dict:
+        """Cancel one task: a running attempt is discarded, dependents are skipped."""
+        run = self.require_run(run_id)
+        if run.plan is None:
+            raise KeyError("this run has no plan yet")
+        task = next((t for t in run.plan.tasks if t.id == task_id), None)
+        if task is None:
+            raise KeyError(f"no task '{task_id}' in run {run_id}")
+        if task.status in {TaskStatus.DONE, TaskStatus.FAILED, TaskStatus.CANCELLED}:
+            return {"task_id": task_id, "status": task.status.value, "changed": False}
+        self._cancelled.add((run_id, task_id))
+        task.status = TaskStatus.CANCELLED
+        task.error = reason
+        task.finished_at = utcnow()
+        skipped = 0
+        for other in run.plan.tasks:
+            if task.id in other.depends_on and other.status is TaskStatus.PENDING:
+                other.status = TaskStatus.SKIPPED
+                other.error = "dependency cancelled"
+                skipped += 1
+        self._save(run)
+        self.metrics.inc("tasks.cancelled")
+        await self.bus.emit("task.cancelled", run_id=run_id, task_id=task_id,
+                            payload={"title": task.title, "reason": reason,
+                                     "dependents_skipped": skipped})
+        return {"task_id": task_id, "status": "cancelled", "changed": True,
+                "dependents_skipped": skipped}
 
     def list_runs(self, limit: int = 50) -> list[dict]:
         rows = self.store.list_runs(limit=limit)
@@ -733,6 +766,7 @@ class Orchestrator:
                 bus=self.bus, blackboard=self.blackboard, budget=budget,
             )
             agent.prefer_generators = bool(getattr(self.settings, "prefer_generators", True))
+            agent.stream_tokens = bool(getattr(self.settings, "stream_tokens", True))
             feedback: str | None = None
 
             async def debate_candidates(context: str) -> tuple[str, float | None]:
@@ -763,6 +797,8 @@ class Orchestrator:
 
             async def attempt(_attempt_no: int) -> str:
                 nonlocal feedback
+                if (run.id, task.id) in self._cancelled:
+                    raise asyncio.CancelledError("task cancelled")
                 task.attempts += 1
                 context = self._context_for(run, task)
                 if (self.settings.review_enabled
