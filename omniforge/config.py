@@ -78,6 +78,7 @@ class Settings:
 
     # --- debate ------------------------------------------------------------
     debate_candidates: int = 1           # >1 = run N candidates, keep the best
+    prefer_generators: bool = True       # deterministic artifact over a model call
 
     # --- media -------------------------------------------------------------
     media_api_key: str = ""              # image generation (OpenAI-compatible)
@@ -193,6 +194,7 @@ class Settings:
             run_timeout=_float("OMNIFORGE_RUN_TIMEOUT", 0.0),
             fail_fast=_bool("OMNIFORGE_FAIL_FAST", True),
             debate_candidates=_int("OMNIFORGE_DEBATE_CANDIDATES", 1),
+            prefer_generators=_bool("OMNIFORGE_PREFER_GENERATORS", True),
             media_api_key=os.getenv("OMNIFORGE_MEDIA_API_KEY", "")
             or os.getenv("OPENAI_API_KEY", ""),
             media_base_url=os.getenv("OMNIFORGE_MEDIA_BASE_URL", "https://api.openai.com/v1"),
