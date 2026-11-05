@@ -357,6 +357,25 @@ def _cmd_users(args, settings: Settings) -> int:
     return 0
 
 
+def _cmd_worker(args, settings: Settings) -> int:
+    from .core.worker import Worker
+
+    orch = _build(settings)
+    worker = Worker(orch, worker_id=args.worker_id, lease_seconds=args.lease_seconds,
+                    poll_seconds=args.poll)
+    if args.once:
+        result = asyncio.run(worker.run_once())
+        print(json.dumps(result or {"processed": 0, "queued": orch.store.queued_count()}, indent=2))
+        return 0
+    print(f"worker {worker.worker_id} polling (max_runs={args.max_runs})")
+    try:
+        report = asyncio.run(worker.run_forever(max_runs=args.max_runs))
+    except KeyboardInterrupt:  # pragma: no cover - interactive
+        report = worker.status()
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def _cmd_db(args, settings: Settings) -> int:
     from .core import pgmirror
     from .core.pg import PostgresUnavailable
@@ -580,6 +599,13 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("metrics", help="storage counters as JSON")
 
+    p_worker = sub.add_parser("worker", help="process queued runs (worker mode)")
+    p_worker.add_argument("--once", action="store_true", help="claim and run one, then exit")
+    p_worker.add_argument("--max-runs", type=int, default=None)
+    p_worker.add_argument("--worker-id", default=None)
+    p_worker.add_argument("--lease-seconds", type=int, default=300)
+    p_worker.add_argument("--poll", type=float, default=0.5)
+
     p_db = sub.add_parser("db", help="database status, Postgres mirror or verify")
     p_db.add_argument("--sync", metavar="POSTGRES_URL", help="mirror SQLite into PostgreSQL")
     p_db.add_argument("--verify", metavar="POSTGRES_URL", help="check a PostgreSQL mirror")
@@ -644,6 +670,7 @@ def main(argv: list[str] | None = None) -> int:
         "history": lambda: _cmd_history(args, settings),
         "kb": lambda: _cmd_kb(args, settings),
         "metrics": lambda: _cmd_metrics(args, settings),
+        "worker": lambda: _cmd_worker(args, settings),
         "db": lambda: _cmd_db(args, settings),
         "alerts": lambda: _cmd_alerts(args, settings),
         "loadtest": lambda: _cmd_loadtest(args, settings),
