@@ -31,6 +31,11 @@ class Worker:
         self.poll_seconds = poll_seconds
         self.processed = 0
         self.failures = 0
+        self.broker = None
+        if getattr(orchestrator.settings, "broker_url", ""):
+            from .broker import build_broker
+
+            self.broker = build_broker(orchestrator.settings, self.store)
 
     # ------------------------------------------------------------------ claim
     def _lease_window(self) -> tuple[str, str]:
@@ -39,6 +44,15 @@ class Worker:
         return now.isoformat(timespec="seconds"), expires
 
     def claim(self) -> dict | None:
+        if self.broker is not None and self.broker.name == "redis":
+            claimed = self.broker.claim(self.worker_id, self.lease_seconds)
+            if not claimed:
+                return None
+            record = self.store.get_run(claimed["id"])
+            if record is None:
+                self.broker.release(claimed["id"])
+                return None
+            return record
         now, expires = self._lease_window()
         return self.store.claim_next_run(self.worker_id, self.lease_seconds, now, expires)
 
@@ -73,6 +87,8 @@ class Worker:
             return {"run_id": run.id, "status": "error", "error": str(exc),
                     "worker": self.worker_id}
         finally:
+            if self.broker is not None and self.broker.name == "redis":
+                self.broker.release(run.id)
             self.store.release_lease(run.id)
 
     def orchestrator_run_status(self):
