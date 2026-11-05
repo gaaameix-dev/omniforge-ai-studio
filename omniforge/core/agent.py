@@ -94,6 +94,19 @@ class Agent:
 
     async def _complete(self, system: str, prompt: str, run, task):
         """Call the model, streaming deltas as throttled events when enabled."""
+        tracer = getattr(self, "tracer", None)
+        if tracer is None:
+            return await self._complete_inner(system, prompt, run, task)
+        with tracer.span("llm", run_id=run.id, task=task.title,
+                         model=getattr(self.llm, "model", self.llm.name),
+                         prompt_chars=len(prompt)) as span:
+            response = await self._complete_inner(system, prompt, run, task)
+            span.attributes["completion_chars"] = len(getattr(response, "text", "") or "")
+            span.attributes["tokens"] = (getattr(response, "prompt_tokens", 0)
+                                         + getattr(response, "completion_tokens", 0))
+            return response
+
+    async def _complete_inner(self, system: str, prompt: str, run, task):
         if not getattr(self, "stream_tokens", True) or not hasattr(self.llm, "stream"):
             return await self.llm.complete(system, prompt)
 
