@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
@@ -401,6 +401,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.store.add_audit(getattr(identity, "email", None), "knowledge.imported", None,
                                   f"{added} documents", None, auth_core.utcnow())
         return {"added": added, "skipped": skipped, "total": len(req.documents)}
+
+    @app.post("/api/knowledge/import-file", status_code=201)
+    async def knowledge_import_file(request: Request, file: UploadFile = File(...)) -> dict:
+        identity = getattr(request.state, "identity", None)
+        if identity is not None:
+            _require_manage(identity)
+        from ..core.knowledge_import import ImportError_ as ImportProblem
+        from ..core.knowledge_import import parse_upload
+
+        payload = await file.read()
+        try:
+            parsed = parse_upload(file.filename or "upload", payload)
+        except ImportProblem as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        o = orch()
+        for document in parsed["documents"]:
+            o.knowledge.add("manual", document["title"], document["text"],
+                            auth_core.utcnow())
+        app.state.store.add_audit(getattr(identity, "email", None), "knowledge.imported",
+                                  file.filename, f"{len(parsed['documents'])} documents",
+                                  None, auth_core.utcnow())
+        return {"added": len(parsed["documents"]), "skipped": parsed["skipped"]}
 
     @app.get("/api/knowledge/search")
     async def knowledge_search(q: str, limit: int = 5, mode: str = "lexical") -> dict:
