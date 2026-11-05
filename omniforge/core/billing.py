@@ -58,6 +58,52 @@ class Billing:
             return 0.0
         return (input_tokens / 1_000_000) * price[0] + (output_tokens / 1_000_000) * price[1]
 
+    @staticmethod
+    def provider_of(model: str) -> str:
+        model = (model or "").lower()
+        if model.startswith(("gpt", "o1", "o3", "text-embedding", "dall-e", "whisper")):
+            return "openai"
+        if model.startswith("claude"):
+            return "anthropic"
+        if model.startswith("gemini"):
+            return "google"
+        if model.startswith(("llama", "mistral", "qwen", "phi")):
+            return "open-source"
+        return "other"
+
+    def provider_usage(self, *, this_month: bool = True) -> list[dict[str, Any]]:
+        since = month_start() if this_month else None
+        summary = self.store.usage_summary(since=since)
+        budgets = getattr(self.settings, "provider_budgets", {}) or {}
+        rows: dict[str, dict[str, Any]] = {}
+        for entry in summary["by_model"]:
+            provider = self.provider_of(entry["model"])
+            row = rows.setdefault(provider, {"provider": provider, "cost_usd": 0.0,
+                                             "tokens": 0, "models": []})
+            row["cost_usd"] = round(row["cost_usd"] + entry["cost_usd"], 6)
+            row["tokens"] += entry["input_tokens"] + entry["output_tokens"]
+            row["models"].append(entry["model"])
+        for provider, budget in budgets.items():
+            row = rows.setdefault(provider, {"provider": provider, "cost_usd": 0.0,
+                                             "tokens": 0, "models": []})
+            row["budget_usd"] = budget
+            row["remaining_usd"] = round(max(0.0, budget - row["cost_usd"]), 6)
+            row["exhausted"] = row["cost_usd"] >= budget
+        return sorted(rows.values(), key=lambda r: r["provider"])
+
+    def check_provider_budget(self, model: str) -> None:
+        provider = self.provider_of(model)
+        budgets = getattr(self.settings, "provider_budgets", {}) or {}
+        budget = budgets.get(provider)
+        if not budget:
+            return
+        spent = next((r["cost_usd"] for r in self.provider_usage() if r["provider"] == provider), 0.0)
+        if spent >= budget:
+            raise PermissionError(
+                f"monthly budget for provider '{provider}' is exhausted "
+                f"(${spent:.2f} of ${budget:.2f})"
+            )
+
     def pricing(self) -> list[dict[str, Any]]:
         return [
             {"model": model, "input_per_1m": in_price, "output_per_1m": out_price}
