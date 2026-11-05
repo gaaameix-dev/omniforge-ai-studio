@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.0
+
+Closed 11 more backlog items:
+
+- **Video, music and 3D generation** through one job-API adapter
+  (`core/media_jobs.py`) with a glTF validator; `/api/media/job?kind=…`.
+- **Engine builds**: `core/engine_build.py` runs a configured engine CLI with a
+  timeout and log capture; availability is reported honestly.
+- **Redis broker** alongside the database queue, with leases and expired-lease
+  requeue; the worker picks it up from `OMNIFORGE_BROKER_URL`.
+- **Leader lease** so only one scheduler ticks across replicas, plus `/api/ready`.
+- **Schema-per-tenant** PostgreSQL isolation (`core/tenancy.py`, `/api/tenants`).
+- **Span tracing** per task with `/api/traces` and an optional OpenTelemetry bridge.
+- **OIDC login** with PKCE (`/api/auth/oidc/login|callback`).
+- **Offline UI queue**: instructions are stored in `localStorage` and sent when the
+  connection returns.
+- CLI: `verify`, `tenants`, `plugins --index --base-url`.
+- Tests: 513 → 537.
+
+Fixed
+- Redis leases with a non-positive TTL are kept (they were deleted by an expire).
+
 ## 1.1.0
 
 Closed 13 backlog items from `docs/REMAINING.md`:
