@@ -28,12 +28,20 @@ CREATE TABLE IF NOT EXISTS runs (
     tokens        INTEGER NOT NULL DEFAULT 0,
     cost_usd      REAL NOT NULL DEFAULT 0,
     project_id    TEXT,
+    idempotency_key TEXT,
+    priority      INTEGER NOT NULL DEFAULT 5,
+    workspace_id  TEXT,
+    lease_owner   TEXT,
+    lease_expires_at TEXT,
     meta          TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS projects (
     id         TEXT PRIMARY KEY,
     name       TEXT NOT NULL,
     created_at TEXT NOT NULL,
+    workspace_id TEXT,
+    owner_id   TEXT,
+    token_quota INTEGER NOT NULL DEFAULT 0,
     meta       TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE IF NOT EXISTS users (
@@ -323,6 +331,8 @@ class RunStore:
             ("idempotency_key", "TEXT"),
             ("priority", "INTEGER NOT NULL DEFAULT 5"),
             ("workspace_id", "TEXT"),
+            ("lease_owner", "TEXT"),
+            ("lease_expires_at", "TEXT"),
         ):
             if column not in columns:
                 self._conn.execute(f"ALTER TABLE runs ADD COLUMN {column} {ddl}")
@@ -403,7 +413,7 @@ class RunStore:
         sql = "SELECT * FROM runs"
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
+        sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
         args.append(limit)
         with self._lock:
             rows = self._conn.execute(sql, args).fetchall()
@@ -424,7 +434,7 @@ class RunStore:
     def find_run_by_idempotency(self, key: str) -> dict[str, Any] | None:
         with self._lock:
             row = self._conn.execute(
-                "SELECT * FROM runs WHERE idempotency_key=? ORDER BY rowid DESC LIMIT 1", (key,)
+                "SELECT * FROM runs WHERE idempotency_key=? ORDER BY created_at DESC, id DESC LIMIT 1", (key,)
             ).fetchone()
         return dict(row) if row else None
 
@@ -1343,6 +1353,54 @@ class RunStore:
                 "SELECT * FROM notifications ORDER BY id DESC LIMIT ?", (limit,)
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # --------------------------------------------------------------- leases
+    def claim_next_run(self, worker_id: str, lease_seconds: int, now: str,
+                       expires: str) -> dict | None:
+        """Atomically take one queued run. Safe with several workers on one database."""
+        with self._lock:
+            row = self._conn.execute(
+                """UPDATE runs
+                   SET status='running', lease_owner=?, lease_expires_at=?, updated_at=?
+                   WHERE id = (
+                       SELECT id FROM runs
+                       WHERE status='queued'
+                         AND (lease_expires_at IS NULL OR lease_expires_at < ?)
+                       ORDER BY priority DESC, created_at ASC
+                       LIMIT 1
+                   )
+                   RETURNING id""",
+                (worker_id, expires, now, now),
+            ).fetchone()
+            self._conn.commit()
+        if not row:
+            return None
+        return self.get_run(row["id"])
+
+    def release_lease(self, run_id: str) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE runs SET lease_owner=NULL, lease_expires_at=NULL WHERE id=?", (run_id,)
+            )
+            self._conn.commit()
+            return cur.rowcount
+
+    def requeue_expired(self, now: str) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE runs SET status='queued', lease_owner=NULL, lease_expires_at=NULL "
+                "WHERE status='running' AND lease_expires_at IS NOT NULL AND lease_expires_at < ?",
+                (now,),
+            )
+            self._conn.commit()
+            return cur.rowcount
+
+    def queued_count(self) -> int:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT COUNT(*) AS n FROM runs WHERE status='queued'"
+            ).fetchone()
+        return int(row["n"]) if row else 0
 
     # ------------------------------------------------------------- projects
     def create_project(self, name: str, ts: str, meta: dict | None = None) -> dict[str, Any]:
