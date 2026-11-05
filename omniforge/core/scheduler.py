@@ -45,6 +45,7 @@ class Scheduler:
         self._task: asyncio.Task | None = None
         self._running = False
         self.fired: list[dict] = []
+        self.leader = None
 
     # ------------------------------------------------------------------ loop
     async def start(self) -> None:
@@ -77,6 +78,9 @@ class Scheduler:
 
     # ------------------------------------------------------------------ tick
     async def tick_once(self, now: str | None = None) -> list[dict]:
+        if self.leader is not None:
+            if not (self.leader.renew() or self.leader.acquire()):
+                return []          # another replica is the scheduler
         now = now or utcnow()
         fired: list[dict] = []
         for schedule in self.store.due_schedules(now):
