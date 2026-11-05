@@ -123,7 +123,7 @@ class Orchestrator:
     def describe(self) -> dict[str, Any]:
         return {
             "framework": "OmniForge AI Studio",
-            "version": "1.2.0",
+            "version": "1.3.0",
             "backend": self.llm.name,
             "live_mode": self.settings.live_mode,
             "departments": [
@@ -821,6 +821,7 @@ class Orchestrator:
             )
             agent.prefer_generators = bool(getattr(self.settings, "prefer_generators", True))
             agent.stream_tokens = bool(getattr(self.settings, "stream_tokens", True))
+            agent.tracer = self.tracer
             feedback: str | None = None
 
             async def debate_candidates(context: str) -> tuple[str, float | None]:
@@ -990,15 +991,19 @@ class Orchestrator:
         approved = bool((run.meta or {}).get("allow_destructive"))
 
         async def call(name: str, **kwargs) -> Any:
-            return await self.tools.call_checked(
-                name,
-                kwargs,
-                permissions=getattr(template, "permissions", ()),
-                approved=approved,
-                run_id=run.id,
-                agent_id=getattr(template, "id", None),
-                logger=self._log_tool_call,
-            )
+            with self.tracer.span("tool", run_id=run.id, tool=name,
+                                  agent=getattr(template, "id", None)) as span:
+                result = await self.tools.call_checked(
+                    name,
+                    kwargs,
+                    permissions=getattr(template, "permissions", ()),
+                    approved=approved,
+                    run_id=run.id,
+                    agent_id=getattr(template, "id", None),
+                    logger=self._log_tool_call,
+                )
+                span.attributes["result_chars"] = len(str(result))
+                return result
 
         return call
 
