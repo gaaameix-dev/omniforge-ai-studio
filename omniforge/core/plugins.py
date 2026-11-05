@@ -271,3 +271,63 @@ async def install_from_url(store, data_dir, url: str, settings, owner_id: str | 
     record = install(store, data_dir, payload, settings, owner_id, ts)
     record["source_url"] = url
     return record
+
+
+def _manifest_path(store, data_dir, plugin: dict) -> Path:
+    """Where the manifest lives: the recorded path, else name-version."""
+    recorded = plugin.get("path")
+    if recorded:
+        candidate = Path(recorded)
+        if candidate.is_dir():
+            candidate = candidate / "manifest.json"
+        if candidate.exists():
+            return candidate
+    return Path(data_dir) / "plugins" / f"{plugin['name']}-{plugin['version']}" / "manifest.json"
+
+
+def build_index(store, data_dir, settings, *, base_url: str = "") -> dict:
+    """A registry index describing the packages this deployment can serve."""
+    import hashlib
+    import io
+    import zipfile
+
+    entries = []
+    for plugin in store.list_plugins():
+        manifest_path = _manifest_path(store, data_dir, plugin)
+        if not manifest_path.exists():
+            continue
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as bundle:
+            bundle.writestr("manifest.json", manifest_path.read_text())
+        payload = buffer.getvalue()
+        manifest = json.loads(manifest_path.read_text())
+        entries.append({
+            "name": plugin["name"],
+            "version": plugin["version"],
+            "url": f"{base_url.rstrip('/')}/api/plugins/{plugin['id']}/export" if base_url else "",
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "description": manifest.get("description", ""),
+            "permissions": manifest.get("permissions", []),
+            "trust": plugin["trust"],
+        })
+    from datetime import datetime, timezone
+
+    return {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "count": len(entries), "plugins": entries}
+
+
+def export_package(store, data_dir, plugin_id: str) -> bytes:
+    """Rebuild a distributable package for one installed plugin."""
+    import io
+    import zipfile
+
+    plugin = store.get_plugin(plugin_id)
+    if plugin is None:
+        raise PluginError("plugin not found")
+    manifest_path = _manifest_path(store, data_dir, plugin)
+    if not manifest_path.exists():
+        raise PluginError("this plugin has no manifest on disk")
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as bundle:
+        bundle.writestr("manifest.json", manifest_path.read_text())
+    return buffer.getvalue()
