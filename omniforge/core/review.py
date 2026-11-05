@@ -66,8 +66,19 @@ class Reviewer:
             issues.append(f"output shorter than {min_chars} characters")
 
         required = getattr(skill, "required_any", ()) or ()
+        must = getattr(skill, "must_contain", ()) or ()
+        min_words = int(getattr(skill, "min_words", 0) or 0)
         if required and not any(marker.lower() in lowered for marker in required):
             issues.append("missing required section: " + " / ".join(required))
+            critical = True
+
+        missing_terms = [term for term in must if term.lower() not in lowered]
+        if missing_terms:
+            issues.append("rubric terms missing: " + ", ".join(missing_terms[:4]))
+            critical = True
+        words = len(text.split())
+        if min_words and words < min_words:
+            issues.append(f"rubric wants at least {min_words} words, got {words}")
             critical = True
 
         if context and text and text in context:
