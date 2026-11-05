@@ -41,6 +41,12 @@ class SettingsPatch(BaseModel):
     values: dict[str, Any]
 
 
+class RevocationRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    version: str = Field(min_length=1, max_length=40)
+    reason: str = ""
+
+
 class AlertRouteRequest(BaseModel):
     team: str = Field(min_length=2, max_length=80)
     channel: str
@@ -48,11 +54,23 @@ class AlertRouteRequest(BaseModel):
 
 
 # runtime-tunable settings; anything not listed stays environment-only
-TUNABLE = {
-    "llm_model": str, "debate_candidates": int, "prefer_generators": bool,
-    "stream_tokens": bool, "review_enabled": bool, "max_parallel": int,
-    "budget_tokens": int, "require_approval": bool, "moderation_enabled": bool,
-    "alert_email": str, "worker_mode": bool,
+def _as_tuple(value: Any) -> tuple[str, ...]:
+    if isinstance(value, (list, tuple)):
+        return tuple(str(item).strip() for item in value if str(item).strip())
+    return tuple(part.strip() for part in str(value).split(",") if part.strip())
+
+
+# runtime-tunable settings; keys, paths and credentials stay environment-only
+TUNABLE: dict[str, Any] = {
+    "llm_model": str, "debate_candidates": int, "debate_judge": bool,
+    "prefer_generators": bool, "stream_tokens": bool, "review_enabled": bool,
+    "review_with_llm": bool, "max_parallel": int, "budget_tokens": int,
+    "require_approval": bool, "moderation_enabled": bool, "moderation_llm": bool,
+    "alert_email": str, "alert_on_failure": bool, "worker_mode": bool,
+    "max_tasks_per_run": int, "run_timeout": int, "max_rework": int,
+    "http_allowlist": _as_tuple, "cors_origins": _as_tuple,
+    "media_model": str, "embedding_model": str, "sandbox_timeout": int,
+    "user_monthly_tokens": int,
 }
 
 
@@ -323,7 +341,13 @@ def register(app, *, orch) -> None:
         for key, raw in req.values.items():
             cast = TUNABLE[key]
             try:
-                value = cast(raw) if cast is not bool else bool(raw)
+                if cast is _as_tuple:
+                    value = _as_tuple(raw)
+                elif cast is bool:
+                    value = raw if isinstance(raw, bool) else str(raw).lower() in {
+                        "1", "true", "yes", "on"}
+                else:
+                    value = cast(raw)
             except (TypeError, ValueError):
                 raise HTTPException(status_code=400, detail=f"bad value for {key}") from None
             setattr(settings(), key, value)
@@ -365,6 +389,20 @@ def register(app, *, orch) -> None:
         identity = _identity(request)
         _require(identity, "manage")
         return {"removed": store().delete_alert_route(team)}
+
+    @app.get("/api/plugins/revocations")
+    async def list_revocations(request: Request) -> dict:
+        _require(_identity(request), "read")
+        return {"revocations": store().list_revocations()}
+
+    @app.post("/api/plugins/revocations", status_code=201)
+    async def revoke_plugin(req: RevocationRequest, request: Request) -> dict:
+        identity = _identity(request)
+        _require(identity, "manage")
+        store().revoke_plugin(req.name, req.version, req.reason, auth.utcnow())
+        store().add_audit(identity.email, "plugin.revoked", f"{req.name}@{req.version}",
+                          req.reason, None, auth.utcnow())
+        return {"name": req.name, "version": req.version, "revoked": True}
 
     # ------------------------------------------------------- marketplace
     @app.get("/api/plugins/index")
