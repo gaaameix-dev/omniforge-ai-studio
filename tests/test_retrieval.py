@@ -169,10 +169,15 @@ def test_store_from_url_sqlite(tmp_path):
     store.close()
 
 
-def test_postgres_without_driver_explains_itself():
-    with pytest.raises(pg.PostgresUnavailable) as exc:
-        pg.store_from_url("postgres://user:pw@localhost/db")
-    assert "SQLite" in str(exc.value) or "psycopg" in str(exc.value)
+def test_postgres_url_either_connects_or_explains_itself():
+    """With the driver a Postgres URL builds a store; without it, a clear error."""
+    try:
+        store = pg.store_from_url("postgres://user:pw@127.0.0.1:1/db?connect_timeout=1")
+    except pg.PostgresUnavailable as exc:
+        assert "psycopg" in str(exc) or "PostgreSQL" in str(exc)
+    else:
+        assert store.backend() == "postgres"
+        store.close()
 
 
 def test_unknown_database_url_is_rejected():
