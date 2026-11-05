@@ -194,14 +194,22 @@ class BaseLLM:
         data["strategy"] = self.name
         return data
 
-    async def synthesize(self, goal: str, results: list[dict[str, Any]]) -> str:
+    def synthesis_prompt(self, goal: str, results: list[dict[str, Any]]) -> tuple[str, str]:
         body = "\n\n".join(f"## {r['title']} ({r['department']})\n{r['result']}" for r in results)
         prompt = (
             f"Goal: {goal}\n\nCompleted task outputs:\n{body}\n\n"
             "Write a short handoff summary: what was produced, what is still open, "
             "and the recommended next three actions."
         )
-        resp = await self.complete("You are the Master Orchestrator writing a handoff.", prompt)
+        return "You are the Master Orchestrator writing a handoff.", prompt
+
+    async def synthesize(self, goal: str, results: list[dict[str, Any]],
+                         on_token=None) -> str:
+        system, prompt = self.synthesis_prompt(goal, results)
+        if on_token is not None:
+            resp = await self.stream(system, prompt, on_token)
+        else:
+            resp = await self.complete(system, prompt)
         return resp.text.strip()
 
 
@@ -402,7 +410,8 @@ class MockLLM(BaseLLM):
     async def plan(self, goal: str, catalog: dict[str, list[str]]) -> dict[str, Any]:
         return heuristic_plan(goal, catalog)
 
-    async def synthesize(self, goal: str, results: list[dict[str, Any]]) -> str:
+    async def synthesize(self, goal: str, results: list[dict[str, Any]],
+                         on_token=None) -> str:
         lines = [f"Handoff summary for: {goal}", ""]
         lines.append(f"Completed tasks: {len(results)}")
         for r in results:
