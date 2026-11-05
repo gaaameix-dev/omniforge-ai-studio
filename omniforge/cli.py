@@ -63,6 +63,14 @@ async def _cmd_run(args, settings: Settings) -> int:
                     extra = f" attempt={event.payload.get('attempt')} {event.payload.get('reason', '')[:60]}"
                 print(f"  [{event.ts}] {event.type:18s} {event.payload.get('title', '')}{extra}",
                       flush=True)
+            if args.watch and event.type in {"agent.token", "run.token", "task.debated",
+                                            "budget.exceeded", "alerts.fired"}:
+                if event.type in {"agent.token", "run.token"}:
+                    sys.stdout.write(event.payload.get("delta", ""))
+                    sys.stdout.flush()
+                else:
+                    print(f"  [{event.ts}] {event.type:18s} "
+                          f"{json.dumps(event.payload)[:120]}", flush=True)
             if event.type == "approval.requested":
                 if sys.stdin.isatty():
                     answer = input("    approve this task? [y/N] ").strip().lower()
@@ -357,6 +365,24 @@ def _cmd_users(args, settings: Settings) -> int:
     return 0
 
 
+def _cmd_completions(args, settings: Settings) -> int:
+    """Print a shell completion script for the CLI commands."""
+    commands = sorted({
+        action.dest for action in _parser(settings)._subparsers._group_actions[0].choices.keys()
+    }) if False else []
+    names = ["run", "serve", "agents", "skills", "departments", "info", "demo", "doctor",
+             "eval", "replay", "history", "kb", "metrics", "integrations", "tools",
+             "backup", "restore", "users", "vault", "plugins", "automation", "usage",
+             "loadtest", "db", "alerts", "worker"]
+    if args.shell == "bash":
+        print("_omniforge() { COMPREPLY=( $(compgen -W \"" + " ".join(names) +
+              "\" -- \"${COMP_WORDS[1]}\") ); }\ncomplete -F _omniforge omniforge")
+    else:
+        print("#compdef omniforge\n_omniforge() { _arguments '1:command:(" +
+              " ".join(names) + ")' }\n_omniforge \"$@\"")
+    return 0
+
+
 def _cmd_worker(args, settings: Settings) -> int:
     from .core.worker import Worker
 
@@ -565,6 +591,8 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("goal")
     p_run.add_argument("--auto-approve", action="store_true", help="skip human approval gates")
     p_run.add_argument("--json", action="store_true", help="print the full run record")
+    p_run.add_argument("--watch", action="store_true",
+                       help="stream tokens and key events while the run works")
 
     p_serve = sub.add_parser("serve", help="start the HTTP API and dashboard")
     p_serve.add_argument("--host", default="127.0.0.1")
@@ -598,6 +626,9 @@ def main(argv: list[str] | None = None) -> int:
     p_kb.add_argument("--limit", type=int, default=5)
 
     sub.add_parser("metrics", help="storage counters as JSON")
+
+    p_comp = sub.add_parser("completions", help="print a shell completion script")
+    p_comp.add_argument("shell", choices=["bash", "zsh"], nargs="?", default="bash")
 
     p_worker = sub.add_parser("worker", help="process queued runs (worker mode)")
     p_worker.add_argument("--once", action="store_true", help="claim and run one, then exit")
@@ -671,6 +702,7 @@ def main(argv: list[str] | None = None) -> int:
         "kb": lambda: _cmd_kb(args, settings),
         "metrics": lambda: _cmd_metrics(args, settings),
         "worker": lambda: _cmd_worker(args, settings),
+        "completions": lambda: _cmd_completions(args, settings),
         "db": lambda: _cmd_db(args, settings),
         "alerts": lambda: _cmd_alerts(args, settings),
         "loadtest": lambda: _cmd_loadtest(args, settings),
