@@ -112,11 +112,15 @@ class PgConnection:
 class PostgresStore(RunStore):
     """Same API as RunStore, backed by PostgreSQL."""
 
-    def __init__(self, url: str, *, create_schema: bool = True) -> None:
+    def __init__(self, url: str, *, create_schema: bool = True, schema: str = "") -> None:
         self.url = url
+        self.schema = schema
         self.path = Path("postgres://…")
         self._lock = threading.RLock()
         self._conn = PgConnection(url)
+        if schema:
+            with self._conn.raw.cursor() as cur:
+                cur.execute(f'SET search_path TO "{schema}", public')
         if create_schema:
             pg.init_schema(self._conn.raw)
         self._runs_dir = Path(".")
