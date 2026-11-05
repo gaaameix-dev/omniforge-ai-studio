@@ -6,6 +6,7 @@ Swap in a real endpoint through OMNIFORGE_LLM_* and nothing else changes.
 """
 from __future__ import annotations
 
+import inspect
 import json
 import re
 from dataclasses import dataclass
@@ -155,11 +156,26 @@ def heuristic_plan(goal: str, catalog: dict[str, list[str]]) -> dict[str, Any]:
     return {"strategy": "heuristic", "tasks": tasks}
 
 
+def estimate_tokens(text: str) -> int:
+    """Rough token count (~4 characters per token); used when a stream sends no usage."""
+    return max(1, len(text or "") // 4)
+
+
 class BaseLLM:
     name = "base"
 
     async def complete(self, system: str, prompt: str, *, json_mode: bool = False) -> LLMResponse:
         raise NotImplementedError
+
+    async def stream(self, system: str, prompt: str, on_token, *,
+                     json_mode: bool = False) -> LLMResponse:
+        """Emit the answer incrementally. Backends without streaming emit one chunk."""
+        response = await self.complete(system, prompt, json_mode=json_mode)
+        if on_token is not None and response.text:
+            result = on_token(response.text)
+            if inspect.isawaitable(result):
+                await result
+        return response
 
     async def plan(self, goal: str, catalog: dict[str, list[str]]) -> dict[str, Any]:
         catalog_text = "\n".join(
@@ -192,11 +208,20 @@ class BaseLLM:
 class OpenAICompatibleLLM(BaseLLM):
     name = "openai-compatible"
 
-    def __init__(self, base_url: str, api_key: str, model: str, timeout: float = 90.0) -> None:
+    def __init__(self, base_url: str, api_key: str, model: str, timeout: float = 90.0,
+                 temperature: float = 0.2, transport: Any | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
         self.timeout = timeout
+        self.temperature = temperature
+        self.transport = transport
+
+    def _client_kwargs(self) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {"timeout": self.timeout}
+        if self.transport is not None:
+            kwargs["transport"] = self.transport
+        return kwargs
 
     async def complete(self, system: str, prompt: str, *, json_mode: bool = False) -> LLMResponse:
         payload: dict[str, Any] = {
@@ -222,6 +247,57 @@ class OpenAICompatibleLLM(BaseLLM):
             prompt_tokens=usage.get("prompt_tokens", 0),
             completion_tokens=usage.get("completion_tokens", 0),
         )
+
+
+    async def stream(self, system: str, prompt: str, on_token, *,
+                     json_mode: bool = False) -> LLMResponse:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": self.temperature,
+            "stream": True,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        chunks: list[str] = []
+        kwargs: dict[str, Any] = {"timeout": self.timeout}
+        if self.transport is not None:
+            kwargs["transport"] = self.transport
+        async with httpx.AsyncClient(**kwargs) as client:
+            async with client.stream("POST", f"{self.base_url}/chat/completions",
+                                     json=payload, headers=headers) as response:
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    raise httpx.HTTPStatusError(
+                        f"{response.status_code}: {body[:200]!r}", request=response.request,
+                        response=response,
+                    )
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    try:
+                        event = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    for choice in event.get("choices") or []:
+                        delta = (choice.get("delta") or {}).get("content")
+                        if delta:
+                            chunks.append(delta)
+                            if on_token is not None:
+                                result = on_token(delta)
+                                if inspect.isawaitable(result):
+                                    await result
+        text = "".join(chunks)
+        return LLMResponse(text=text, model=self.model,
+                           prompt_tokens=estimate_tokens(system + prompt),
+                           completion_tokens=estimate_tokens(text))
 
 
 class AnthropicLLM(BaseLLM):
