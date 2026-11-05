@@ -57,7 +57,11 @@ class Skill:
 
 
 def register_library(registry, specs: list[dict[str, Any]], handlers: dict[str, Callable] | None = None) -> None:
-    handlers = handlers or {}
+    from .generators import GENERATORS
+
+    handlers = dict(handlers or {})
+    for name, generator in GENERATORS.items():
+        handlers.setdefault(name, generator)
     for spec in specs:
         registry.register(
             spec["name"],
