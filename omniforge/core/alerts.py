@@ -22,6 +22,7 @@ COMPARATORS = {"gt": lambda a, b: a > b, "gte": lambda a, b: a >= b,
                "lt": lambda a, b: a < b, "lte": lambda a, b: a <= b,
                "eq": lambda a, b: a == b}
 CHANNELS = {"email", "webhook"}
+SEVERITIES = {"info", "warning", "critical"}
 
 
 def utcnow() -> str:
@@ -70,6 +71,8 @@ class AlertEngine:
             raise ValueError(f"comparator must be one of {sorted(COMPARATORS)}")
         if kwargs.get("channel") not in CHANNELS:
             raise ValueError(f"channel must be one of {sorted(CHANNELS)}")
+        if kwargs.get("severity") and kwargs["severity"] not in SEVERITIES:
+            raise ValueError(f"severity must be one of {sorted(SEVERITIES)}")
         rule = AlertRule(
             name=str(kwargs.get("name") or "rule"),
             metric=kwargs["metric"],
@@ -87,6 +90,9 @@ class AlertEngine:
             "channel": rule.channel, "target": rule.target,
             "cooldown_seconds": rule.cooldown_seconds,
             "team": (str(kwargs.get("team")).strip() or None) if kwargs.get("team") else None,
+            "severity": str(kwargs.get("severity") or "warning"),
+            "quiet_start": kwargs.get("quiet_start"),
+            "quiet_end": kwargs.get("quiet_end"),
             "enabled": 1 if rule.enabled else 0, "created_at": rule.created_at,
         }
         self.store.add_alert_rule(data)
@@ -133,6 +139,9 @@ class AlertEngine:
                 continue
             if self._in_cooldown(rule, now):
                 continue
+            if self._in_quiet_hours(rule, now) and rule.get("severity") != "critical":
+                self.metrics_quiet = getattr(self, "metrics_quiet", 0) + 1
+                continue
             delivered = await self._deliver(rule, value, run)
             self.store.touch_alert_rule(rule["id"], now)
             self.store.add_audit(None, "alert.fired", rule["id"],
@@ -142,6 +151,22 @@ class AlertEngine:
                           "value": value, "channel": rule["channel"],
                           "team": rule.get("team"), **delivered})
         return fired
+
+    @staticmethod
+    def _in_quiet_hours(rule: dict, now: str) -> bool:
+        """Quiet hours are UTC hours; a window may wrap past midnight."""
+        start, end = rule.get("quiet_start"), rule.get("quiet_end")
+        if start is None or end is None:
+            return False
+        try:
+            hour = datetime.fromisoformat(now).hour
+        except ValueError:
+            return False
+        if int(start) == int(end):
+            return False
+        if int(start) < int(end):
+            return int(start) <= hour < int(end)
+        return hour >= int(start) or hour < int(end)
 
     def _in_cooldown(self, rule: dict, now: str) -> bool:
         last = rule.get("last_fired_at")
