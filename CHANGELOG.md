@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1
+
+Added
+- `docs/REMAINING.md`: the single honest backlog - 42 items across never-built,
+  built-but-limited, ready-and-waiting-on-credentials, and non-goals, each with the
+  exact blocker and a size estimate. Linked from README and FEATURES.
+
+Fixed
+- Nothing functional.
+
 ## 1.0.0
 
 Added
