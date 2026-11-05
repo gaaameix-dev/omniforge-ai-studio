@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.1.0
+
+Closed 13 backlog items from `docs/REMAINING.md`:
+
+- **Review rubric** per skill (`min_words`, `must_contain`), enforced as critical.
+- **Provider cost hard stop** inside the run loop, not only before the next run.
+- **Delegation budget guard**: refused past 90% of the run budget.
+- **Backup schedules**: `job: "backup"` produces a verified archive on its tick.
+- **Import formats**: `/api/knowledge/import-file` for txt/md/csv/json/zip with skip reasons.
+- **Alert severity + quiet hours**, critical bypasses quiet hours.
+- **Ed25519 plugin signatures** and a revocation list enforced at install.
+- **Debate judge**: a model picks the winning candidate; review score is the fallback.
+- **Streamed handoff summary** (`run.token`) plus WS reconnect.
+- **24 tunable settings** (was 11).
+- **CLI**: `run --watch`, `omniforge completions bash|zsh`.
+- **Draggable workflow graph** in the Builder.
+- **Accessibility**: aria-live regions, role=status, labelled nav, focus ring.
+
+Tests: 496 → 513.
+
 ## 1.0.1
 
 Added
