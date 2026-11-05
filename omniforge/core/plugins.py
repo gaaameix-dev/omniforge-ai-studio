@@ -35,6 +35,37 @@ def sign(manifest: dict[str, Any], secret: str) -> str:
     return hmac.new(secret.encode(), canonical(manifest), hashlib.sha256).hexdigest()
 
 
+def canonical_body(manifest: dict[str, Any]) -> bytes:
+    body = {k: v for k, v in manifest.items() if k != "signature"}
+    return json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+
+
+def verify_public_signature(manifest: dict[str, Any], public_key_b64: str) -> bool:
+    """Ed25519 check: manifest['signature'] is base64 over the canonical body."""
+    if not public_key_b64 or not manifest.get("signature"):
+        return False
+    try:
+        import base64
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+        key = Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key_b64))
+        key.verify(base64.b64decode(manifest["signature"]), canonical_body(manifest))
+        return True
+    except Exception:  # noqa: BLE001 - any failure means "not verified"
+        return False
+
+
+def sign_public(manifest: dict[str, Any], private_key_b64: str) -> str:
+    """Publisher helper: the base64 signature to store in the manifest."""
+    import base64
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    key = Ed25519PrivateKey.from_private_bytes(base64.b64decode(private_key_b64))
+    return base64.b64encode(key.sign(canonical_body(manifest))).decode()
+
+
 def verify_signature(manifest: dict[str, Any], secret: str) -> bool:
     signature = manifest.get("signature") or ""
     if not secret or not signature:
@@ -125,8 +156,19 @@ def install(store, data_dir: Path | str, payload: bytes, settings, owner_id: str
             issues = validate_manifest(manifest, settings)
             if issues:
                 raise PluginError("; ".join(issues))
+            revoked = store.is_revoked(str(manifest.get("name")),
+                                       str(manifest.get("version")))
+            if revoked:
+                raise PluginError(
+                    f"{manifest.get('name')} {manifest.get('version')} is revoked: "
+                    f"{revoked.get('reason') or 'no reason given'}"
+                )
 
-            trust = "verified" if verify_signature(manifest, settings.secret_key or "") else "unsigned"
+            public_key = getattr(settings, "plugin_public_key", "") or ""
+            verified = verify_public_signature(manifest, public_key) if public_key else False
+            if not verified:
+                verified = verify_signature(manifest, settings.secret_key or "")
+            trust = "verified" if verified else "unsigned"
             if trust == "unsigned" and getattr(settings, "plugin_require_signature", False):
                 raise PluginError("this deployment accepts signed plugins only")
             if trust == "unsigned" and not getattr(settings, "plugin_allow_unsigned", True):
