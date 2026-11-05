@@ -7,7 +7,7 @@ Legend: **Implemented** (code exists and runs) · **Tested** (covered by
 Single source of truth: `omniforge doctor`, `GET /api/integrations`,
 `GET /api/media` and `GET /api/db` report the same state at runtime.
 
-Numbers at this build: **483 tests**, 83% line coverage, 136 routes, 13 dashboard
+Numbers at this build: **496 tests**, 83% line coverage, 136 routes, 13 dashboard
 views, 126 i18n keys (en/hi), 5/5 eval cases.
 
 ## Core orchestration
@@ -131,17 +131,18 @@ views, 126 i18n keys (en/hi), 5/5 eval cases.
 
 | Item | Status | Why |
 |---|---|---|
-| Video / audio / 3D model generation | Not built | needs providers (Runway/ElevenLabs/Blender-class); wiring one would be a new integration, not a flag |
-| Hosted plugin marketplace service | Not built | the format, signing and checksum checks exist; hosting + review is an ops task |
-| Drag-and-drop workflow canvas | Not built | the Builder view is form-based; a node canvas is a separate front-end |
+| Speech (TTS) generation | Yes | Yes | Needs key | `/api/media/speech`, OpenAI-compatible |
+| Video / music / 3D model generation | Not built | needs providers (Runway/Suno/Blender-class); wiring one is a new integration, not a flag |
+| Plugin marketplace index + export | Yes | Yes | Yes | `/api/plugins/index` and `/api/plugins/{id}/export` (self-hostable) |
+| Workflow dependency graph | Yes | Yes (structure) | Yes | SVG graph in the Builder view; drag-to-arrange not built |
 | Physical Android/iOS device testing | Not done | needs hardware or a device farm; the layout is verified structurally only |
-| Per-team alert routing | Not built | rules are global with email/webhook channels |
-| Token-by-token streaming in the UI | Not built | the WebSocket streams events, not model tokens |
-| Single-task cancellation | Not built | a whole run can be cancelled; task-level cancel is open |
+| Per-team alert routing | Yes | Yes | Yes | `alert_routes`, `/api/alert-routes` |
+| Token-by-token streaming | Yes | Yes | Yes | `agent.token` events, live box in the chat view |
+| Single-task cancellation | Yes | Yes | Yes | `/api/runs/{id}/tasks/{task_id}/cancel` |
 | Expert-level prose from generators | Not built | generators produce structured first drafts (specs, tables, code skeletons), not domain-expert judgement |
-| Bulk knowledge import | Not built | documents are indexed per run; bulk import endpoint open |
-| Settings screen (DB-backed config) | Not built | configuration is environment-driven |
-| Docker image / PyPI release | Not published | build locally with `docker compose up --build`; publishing needs registry credentials |
+| Bulk knowledge import | Yes | Yes | Yes | `/api/knowledge/import`, up to 200 documents |
+| Settings screen (DB-backed config) | Yes | Yes | Yes | `/api/settings`, 11 tunable keys, applies live |
+| Docker image / PyPI release | Configured | Workflow only | Not published | `.github/workflows/release.yml` builds the wheel and pushes to GHCR on a tag; publishing needs registry secrets |
 
 ## How to check all of this yourself
 
