@@ -24,6 +24,7 @@ class TaskStatus(str, Enum):
     DONE = "done"
     FAILED = "failed"
     SKIPPED = "skipped"
+    CANCELLED = "cancelled"
 
 
 class RunStatus(str, Enum):
