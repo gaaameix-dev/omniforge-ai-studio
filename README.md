@@ -1,7 +1,7 @@
 # OmniForge AI Studio
 
 [![ci](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-496-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-551-brightgreen)](tests/)
 [![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -46,7 +46,7 @@ omniforge eval                # 5 end-to-end eval cases
 omniforge demo                # two goals, printed plan by plan
 omniforge serve               # dashboard + API on http://127.0.0.1:8000
 omniforge run "Build a 2D mobile puzzle game with 20 levels and a leaderboard"
-pytest -q                     # 496 tests, ~2m10s
+pytest -q                     # 551 tests, ~2m33s
 ```
 
 Live model (any OpenAI-compatible endpoint: OpenAI, Azure, Groq, Together,
@@ -239,6 +239,8 @@ Mobile-first, zero build step, English/Hindi toggle, nine views:
 | `omniforge loadtest --runs N --concurrency C` | latency and throughput report |
 | `omniforge db [--sync URL] [--verify URL]` | database status, Postgres mirror, verification |
 | `omniforge worker [--once] [--max-runs N]` | process queued runs (queue mode) |
+| `omniforge verify --live` | one real call per configured provider |
+| `omniforge ui-audit` | accessibility and responsiveness audit |
 | `omniforge alerts [--create ...] [--delete ID]` | alert rules |
 | `omniforge agents / skills / departments / info / demo` | inspect the framework |
 
@@ -384,7 +386,7 @@ omniforge/
           content_routes · platform_routes
   cli.py
 web/index.html           dashboard v3 (mobile-first)
-tests/                   496 tests
+tests/                   551 tests
 docs/ARCHITECTURE.md     layers, invariants, state machine, extension points
 docs/SECURITY.md         operator security checklist
 docs/TROUBLESHOOTING.md  setup and failure playbook
@@ -396,7 +398,7 @@ ROADMAP.md               item-by-item status for both production addenda
 ## Testing and evals
 
 ```bash
-pytest -q          # 496 tests
+pytest -q          # 551 tests
 omniforge eval     # 5 goal-level cases with explicit checks
 ruff check .       # lint
 ```
