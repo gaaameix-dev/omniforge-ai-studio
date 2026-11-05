@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.0
+
+Closed 5 more backlog items:
+
+- **Engine validation verified against a real engine**: `core/engine_build.validate`
+  opens a scaffolded project headless; a generated Godot project opens with exit 0
+  and no script errors (Godot 4.2.2). `scripts/install_godot.sh` reproduces the setup.
+- **Static UI audit**: `core/ui_audit.py` checks viewport, breakpoints, touch targets,
+  focus, live regions, language, skip link and fixed widths - 10/10 on the shipped
+  dashboard; exposed as `omniforge ui-audit` and `/api/ui-audit`.
+- **pgvector backend with HNSW**: `core/vector_pg.py`, `OMNIFORGE_VECTOR_BACKEND`,
+  `/api/vectors`; verified against PostgreSQL 16 + pgvector 0.6.2.
+- **Tool and LLM spans**: token counts per model call, tool names and result sizes,
+  next to the task spans.
+- **Live provider verification**: `omniforge verify --live` makes one real call per
+  configured provider and names exactly what is missing.
+- CLI: `ui-audit`; `verify --live`.
+- Tests: 537 → 551 (+1 skipped when Godot is absent).
+
 ## 1.2.0
 
 Closed 11 more backlog items:
