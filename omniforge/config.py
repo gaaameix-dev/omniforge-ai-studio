@@ -99,6 +99,7 @@ class Settings:
     media_job_url: str = ""              # job API for video / music / 3D
     media_job_key: str = ""
     engine_commands: dict = field(default_factory=dict)  # {"godot": "godot --headless ..."}
+    engine_validate_commands: dict = field(default_factory=dict)
 
     # --- review loop -------------------------------------------------------
     review_enabled: bool = True
@@ -164,6 +165,8 @@ class Settings:
     # --- retrieval ---------------------------------------------------------
     embedding_api_key: str = ""
     embedding_model: str = "text-embedding-3-small"
+    embedding_dim: int = 1536
+    vector_backend: str = "auto"         # auto | sqlite | pgvector
 
     # --- database ----------------------------------------------------------
     db_url: str = ""                     # sqlite:///path ; postgres is planned
@@ -228,6 +231,8 @@ class Settings:
             media_job_url=os.getenv("OMNIFORGE_MEDIA_JOB_URL", ""),
             media_job_key=os.getenv("OMNIFORGE_MEDIA_JOB_KEY", ""),
             engine_commands=_parse_engine_commands(os.getenv("OMNIFORGE_ENGINE_COMMANDS", "")),
+            engine_validate_commands=_parse_engine_commands(
+                os.getenv("OMNIFORGE_ENGINE_VALIDATE_COMMANDS", "")),
             review_enabled=_bool("OMNIFORGE_REVIEW_ENABLED", True),
             review_min_chars=_int("OMNIFORGE_REVIEW_MIN_CHARS", 40),
             review_with_llm=_bool("OMNIFORGE_REVIEW_WITH_LLM", False),
@@ -256,6 +261,8 @@ class Settings:
             embedding_api_key=os.getenv("OMNIFORGE_EMBEDDING_API_KEY", "")
             or os.getenv("OPENAI_API_KEY", ""),
             embedding_model=os.getenv("OMNIFORGE_EMBEDDING_MODEL", "text-embedding-3-small"),
+            embedding_dim=_int("OMNIFORGE_EMBEDDING_DIM", 1536),
+            vector_backend=os.getenv("OMNIFORGE_VECTOR_BACKEND", "auto"),
             db_url=os.getenv("OMNIFORGE_DB_URL", ""),
             plugins_enabled=_bool("OMNIFORGE_PLUGINS_ENABLED", True),
             plugin_require_signature=_bool("OMNIFORGE_PLUGIN_REQUIRE_SIGNATURE", False),
