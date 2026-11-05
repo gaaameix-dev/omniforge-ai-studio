@@ -130,7 +130,7 @@ SKILLS: list[dict[str, Any]] = [
     # ------------------------------------------------------------------------ qa
     {"name": "test_plan", "required_any": ["## Test levels"], "department": "qa",
      "description": "Test levels, cases and exit criteria for a deliverable.",
-     "tags": ["testing", "plan"]},
+     "min_words": 60, "must_contain": ["exit"], "tags": ["testing", "plan"]},
     {"name": "automated_tests", "department": "qa",
      "description": "Test code for the critical paths, with fixtures.",
      "tags": ["testing", "code"]},
@@ -140,7 +140,8 @@ SKILLS: list[dict[str, Any]] = [
     {"name": "load_test", "department": "qa",
      "description": "Load profile, thresholds and failure-mode analysis.",
      "tags": ["testing", "performance"]},
-    {"name": "security_review", "department": "qa",
+    {"name": "security_review", "department": "qa", "min_words": 90,
+     "must_contain": ("Checklist", "verify"),
      "description": "Threat model and concrete fixes for an exposed surface.",
      "tags": ["security", "review"]},
 
@@ -164,7 +165,7 @@ SKILLS: list[dict[str, Any]] = [
     # ---------------------------------------------------------------- product ops
     {"name": "product_spec", "required_any": ["## Requirements"], "department": "product_ops",
      "description": "Problem, scope, requirements and risks in one spec.",
-     "tags": ["product", "spec"]},
+     "min_words": 80, "must_contain": ["scope"], "tags": ["product", "spec"]},
     {"name": "roadmap_planning", "department": "product_ops",
      "description": "Milestones, sequencing and cut lines for a roadmap.",
      "tags": ["planning", "product"]},
