@@ -224,6 +224,17 @@ CREATE TABLE IF NOT EXISTS project_members (
     created_at TEXT NOT NULL,
     PRIMARY KEY (project_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS alert_routes (
+    team     TEXT PRIMARY KEY,
+    channel  TEXT NOT NULL,
+    target   TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings_overrides (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS alert_rules (
     id               TEXT PRIMARY KEY,
     name             TEXT NOT NULL,
@@ -233,6 +244,7 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     channel          TEXT NOT NULL,
     target           TEXT,
     cooldown_seconds INTEGER NOT NULL DEFAULT 3600,
+    team             TEXT,
     enabled          INTEGER NOT NULL DEFAULT 1,
     last_fired_at    TEXT,
     created_at       TEXT NOT NULL
@@ -972,11 +984,13 @@ class RunStore:
         with self._lock:
             self._conn.execute(
                 "INSERT INTO alert_rules (id, name, metric, comparator, threshold, channel, target, "
-                "cooldown_seconds, enabled, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "cooldown_seconds, team, enabled, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (data["id"], data["name"], data["metric"], data["comparator"],
                  float(data["threshold"]), data["channel"], data.get("target"),
                  (3600 if data.get("cooldown_seconds") is None
                   else int(data["cooldown_seconds"])),
+                 data.get("team"),
                  int(data.get("enabled", 1)),
                  data["created_at"]),
             )
@@ -1003,6 +1017,54 @@ class RunStore:
         with self._lock:
             self._conn.execute("UPDATE alert_rules SET last_fired_at=? WHERE id=?", (ts, rule_id))
             self._conn.commit()
+
+    # ------------------------------------------------------- settings & routes
+    def set_setting(self, key: str, value: str, ts: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO settings_overrides (key, value, updated_at) VALUES (?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                (key, value, ts),
+            )
+            self._conn.commit()
+
+    def get_settings(self) -> dict[str, str]:
+        with self._lock:
+            rows = self._conn.execute("SELECT key, value FROM settings_overrides").fetchall()
+        return {row["key"]: row["value"] for row in rows}
+
+    def delete_setting(self, key: str) -> int:
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM settings_overrides WHERE key=?", (key,))
+            self._conn.commit()
+            return cur.rowcount
+
+    def set_alert_route(self, team: str, channel: str, target: str, ts: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO alert_routes (team, channel, target, created_at) VALUES (?,?,?,?) "
+                "ON CONFLICT(team) DO UPDATE SET channel=excluded.channel, target=excluded.target",
+                (team, channel, target, ts),
+            )
+            self._conn.commit()
+
+    def list_alert_routes(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM alert_routes ORDER BY team").fetchall()
+        return [dict(row) for row in rows]
+
+    def alert_route_for(self, team: str) -> dict | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM alert_routes WHERE team=?", (team,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def delete_alert_route(self, team: str) -> int:
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM alert_routes WHERE team=?", (team,))
+            self._conn.commit()
+            return cur.rowcount
 
     # --------------------------------------------------------------- plugins
     def add_plugin(self, data: dict[str, Any]) -> dict:
