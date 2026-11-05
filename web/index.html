@@ -163,7 +163,7 @@
     <div class="grid chat">
       <div>
         <div class="panel">
-          <h2><span data-i18n="chat.new">New instruction</span> <span class="muted" id="orch-status">orchestrator idle</span></h2>
+          <h2><span data-i18n="chat.new">New instruction</span> <span class="muted" id="orch-status" role="status">orchestrator idle</span></h2>
           <textarea id="goal" data-i18n-ph="chat.ph" placeholder="Mere liye ek 3D open-world Android game banao / build a mobile puzzle game with 20 levels"></textarea>
           <div class="row" style="margin-top:8px">
             <select id="project" style="max-width:200px"><option value="" data-i18n="chat.noproject">no project</option></select>
@@ -204,14 +204,14 @@
         </div>
         <div class="panel" style="margin-top:12px">
           <h2><span data-i18n="chat.stream">Live model output</span> <span class="chip" id="live-agent"></span></h2>
-          <div id="live" class="scroll" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;min-height:60px;max-height:220px"><span class="muted">nothing streaming</span></div>
+          <div id="live" aria-live="polite" aria-atomic="false" class="scroll" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;min-height:60px;max-height:220px"><span class="muted">nothing streaming</span></div>
         </div>
         <div class="panel">
           <h2><span data-i18n="chat.stream">Live model output</span>
             <span class="chip" id="live-agent"></span></h2>
-          <div id="live" class="scroll" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;min-height:54px;max-height:180px"><span class="muted">nothing streaming</span></div>
+          <div id="live" aria-live="polite" aria-atomic="false" class="scroll" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;min-height:54px;max-height:180px"><span class="muted">nothing streaming</span></div>
           <h2 data-i18n="chat.events">Live events</h2>
-          <div id="log"><div class="empty">waiting for a run…</div></div>
+          <div id="log" aria-live="polite"><div class="empty">waiting for a run…</div></div>
         </div>
       </div>
     </div>
@@ -1174,6 +1174,28 @@ $("ws-run").onclick = async () => {
 
 
 /* ------------------------------------------------------- builder graph */
+let graphPositions = {};
+
+function startNodeDrag(ev, index){
+  ev.preventDefault();
+  const svg = ev.target.closest("svg");
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+  const move = (event) => {
+    graphPositions[index] = {
+      x: Math.max(4, event.clientX - rect.left - 95),
+      y: Math.max(4, event.clientY - rect.top - 23),
+    };
+    renderGraph();
+  };
+  const up = () => {
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", up);
+  };
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", up);
+}
+
 function renderGraph(){
   const nodes = builderTasks;
   const box = $("b-graph");
@@ -1199,7 +1221,7 @@ function renderGraph(){
   const pos = {};
   Object.keys(layers).forEach(k => {
     layers[k].forEach((index, row) => {
-      pos[index] = {x: 10 + k * (W + GAP), y: 10 + row * (H + 16)};
+      pos[index] = graphPositions[index] || {x: 10 + k * (W + GAP), y: 10 + row * (H + 16)};
     });
   });
   const lines = edges.map(([a, b]) => {
@@ -1211,12 +1233,14 @@ function renderGraph(){
   }).join("");
   const rects = nodes.map((t, i) => {
     const {x, y} = pos[i];
-    return `<g><rect x="${x}" y="${y}" rx="8" width="${W}" height="${H}"
+    return `<g style="cursor:grab" onpointerdown="startNodeDrag(event, ${i})">
+      <rect x="${x}" y="${y}" rx="8" width="${W}" height="${H}"
       fill="#161f2d" stroke="#2b3d52"/>
       <text x="${x + 10}" y="${y + 19}" fill="#e7eef7" font-size="11">${esc((t.title || "").slice(0, 24))}</text>
       <text x="${x + 10}" y="${y + 35}" fill="#8ba0b8" font-size="10">${esc(t.department || "")}</text></g>`;
   }).join("");
-  box.innerHTML = `<svg width="${width}" height="${height}" role="img" aria-label="workflow dependency graph">
+  box.innerHTML = `<div class="muted" style="font-size:11px;margin-bottom:4px">drag a node to arrange the graph</div>
+    <svg width="${width}" height="${height}" role="img" aria-label="workflow dependency graph">
     <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6"
       orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f4a68"/></marker></defs>
     ${lines}${rects}</svg>`;
@@ -1256,6 +1280,7 @@ function renderBuilder(){
 
 $("b-add").onclick = () => {
   const dept = framework ? framework.departments[0] : {key: "research", skills: ["web_research"]};
+  graphPositions = {};
   builderTasks.push({title: "Task " + (builderTasks.length + 1), department: dept.key,
                      skill: (dept.skills || [])[0] || "", depends: "", when: ""});
   renderBuilder();
