@@ -35,6 +35,17 @@ class SpeechRequest(BaseModel):
     fmt: str = "mp3"
 
 
+class MediaJobRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=2000)
+    options: dict[str, Any] | None = None
+
+
+class BuildRequest(BaseModel):
+    engine: str
+    project: str = Field(min_length=1, max_length=500)
+    timeout: float = Field(default=600.0, ge=10, le=3600)
+
+
 class ScaffoldRequest(BaseModel):
     engine: str
     name: str = "MyGame"
@@ -330,6 +341,34 @@ def register(app, *, orch) -> None:
                           auth.utcnow())
         return {"file": name, "bytes": len(payload), "voice": req.voice}
 
+    @app.post("/api/media/job")
+    async def media_job(req: MediaJobRequest, request: Request, kind: str = "video") -> dict:
+        identity = _identity(request)
+        _require(identity, "run")
+        from ..core.media_jobs import JobMediaError, JobMediaProvider
+
+        provider = JobMediaProvider(settings().media_job_url, settings().media_job_key,
+                                    transport=getattr(app.state, "job_transport", None))
+        if not provider.enabled:
+            raise HTTPException(status_code=409,
+                                detail="video/music/3D need OMNIFORGE_MEDIA_JOB_URL")
+        try:
+            result = await provider.generate(kind, req.prompt, req.options)
+        except JobMediaError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from None
+        suffix = {"video": "mp4", "music": "mp3", "model3d": "glb"}.get(kind, "bin")
+        folder = pathlib.Path(settings().data_dir) / "generated"
+        folder.mkdir(parents=True, exist_ok=True)
+        name = f"{kind}_{auth.utcnow().replace(':', '').replace('-', '')}.{suffix}"
+        (folder / name).write_bytes(result["bytes"])
+        store().add_audit(identity.email, f"media.{kind}", name, f"{result['size']}b", None,
+                          auth.utcnow())
+        payload = {"file": name, "bytes": result["size"], "kind": kind,
+                   "job_id": result.get("job_id")}
+        if kind == "model3d":
+            payload["validation"] = result["validation"]
+        return payload
+
     # ------------------------------------------------------------ engines
     @app.get("/api/engines")
     async def engines(request: Request) -> dict:
@@ -338,6 +377,29 @@ def register(app, *, orch) -> None:
 
         return {"engines": list(ENGINES),
                 "note": "text project skeletons; nothing is compiled or launched"}
+
+    @app.get("/api/engines/availability")
+    async def engine_availability(request: Request) -> dict:
+        _require(_identity(request), "read")
+        from ..core.engine_build import available
+        from ..core.engines import ENGINES
+
+        return {"engines": [available(engine, settings()) for engine in ENGINES]}
+
+    @app.post("/api/engines/build")
+    async def engine_build_endpoint(req: BuildRequest, request: Request) -> dict:
+        identity = _identity(request)
+        _require(identity, "manage")
+        from ..core.engine_build import EngineBuildError, build
+
+        try:
+            result = await build(req.engine, req.project, settings=settings(),
+                                 timeout=min(req.timeout, 3600))
+        except EngineBuildError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        store().add_audit(identity.email, "engine.build", req.engine, req.project, None,
+                          auth.utcnow())
+        return result
 
     @app.post("/api/engines/scaffold")
     async def scaffold_project(req: ScaffoldRequest, request: Request) -> dict:
