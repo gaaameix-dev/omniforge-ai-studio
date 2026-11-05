@@ -1,7 +1,7 @@
 # OmniForge AI Studio
 
 [![ci](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-483-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-496-brightgreen)](tests/)
 [![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -46,7 +46,7 @@ omniforge eval                # 5 end-to-end eval cases
 omniforge demo                # two goals, printed plan by plan
 omniforge serve               # dashboard + API on http://127.0.0.1:8000
 omniforge run "Build a 2D mobile puzzle game with 20 levels and a leaderboard"
-pytest -q                     # 483 tests, ~2m20s
+pytest -q                     # 496 tests, ~2m10s
 ```
 
 Live model (any OpenAI-compatible endpoint: OpenAI, Azure, Groq, Together,
@@ -129,6 +129,18 @@ omniforge run "Build a 2D mobile puzzle game"   # real artifacts, no API key
 Generators are scaffolding, not expertise: budgets and targets are labelled defaults
 you should tune. With a live model you can flip the choice with
 `OMNIFORGE_PREFER_GENERATORS=false`, which sends the prompt path instead.
+
+## Streaming, control and tuning
+
+| Piece | How it works |
+|---|---|
+| Token streaming | `agent.token` events carry model deltas; the chat view shows them live. `OMNIFORGE_STREAM_TOKENS=false` turns it off |
+| Task-level cancel | `POST /api/runs/{id}/tasks/{task_id}/cancel` - the attempt is discarded and dependents are skipped |
+| Runtime settings | `GET/PATCH /api/settings` overrides 11 keys (model, debate, review, budget, worker mode…) and applies immediately; the Settings view in the dashboard drives it |
+| Team alert routes | `POST /api/alert-routes` maps a team to an email or webhook; rules with that team use it |
+| Bulk knowledge import | `POST /api/knowledge/import` with up to 200 documents |
+| Marketplace | `GET /api/plugins/index` publishes an index of installed plugins; `GET /api/plugins/{id}/export` hands out the package |
+| Speech | `POST /api/media/speech` with an OpenAI-compatible key |
 
 ## Scale-out and generation
 
@@ -267,6 +279,11 @@ Auth off unless `OMNIFORGE_API_KEY` is set; then `/api/*` needs
 | GET/POST | `/api/media` · `/api/media/image` | media capability · generate an image |
 | GET/POST | `/api/engines` · `/api/engines/scaffold` | engines · project skeleton |
 | GET | `/api/workers` · `/api/billing/providers` | queue state · per-provider spend |
+| GET/PATCH | `/api/settings` | runtime overrides |
+| GET/POST/DELETE | `/api/alert-routes` | per-team alert routing |
+| GET/POST | `/api/plugins/index` · `/api/plugins/{id}/export` | marketplace index · package |
+| POST | `/api/media/speech` · `/api/knowledge/import` | speech · bulk documents |
+| POST | `/api/runs/{id}/tasks/{task_id}/cancel` | cancel one task |
 | GET | `/api/knowledge/search?mode=semantic` | hybrid retrieval (needs an embedding key) |
 | GET/POST | `/api/runs/{id}/checkpoint` · `/resume` | checkpoint · crash recovery |
 | GET | `/api/health` · `/api/framework` · `/api/stats` | liveness · catalogues+policy · counters |
@@ -320,6 +337,7 @@ curl -s localhost:8000/api/runs -H 'content-type: application/json' \
 | `OMNIFORGE_WORKER_MODE` | `false` | enqueue runs instead of running them inline |
 | `OMNIFORGE_DEBATE_CANDIDATES` | `1` | candidates per task (debate) |
 | `OMNIFORGE_PREFER_GENERATORS` | `true` | use the deterministic skill implementation instead of the model |
+| `OMNIFORGE_STREAM_TOKENS` | `true` | emit `agent.token` events while a model writes |
 | `OMNIFORGE_MEDIA_API_KEY` · `_MEDIA_MODEL` | empty · `gpt-image-1` | image generation |
 | `OMNIFORGE_PROVIDER_BUDGETS` | empty | `openai:5,anthropic:10` USD per month |
 | `ANTHROPIC_API_KEY` · `GEMINI_API_KEY` · `OMNIFORGE_LLM_PROVIDER` · `_LLM_FALLBACK` | empty · empty · `openai` · empty | providers |
@@ -366,7 +384,7 @@ omniforge/
           content_routes · platform_routes
   cli.py
 web/index.html           dashboard v3 (mobile-first)
-tests/                   483 tests
+tests/                   496 tests
 docs/ARCHITECTURE.md     layers, invariants, state machine, extension points
 docs/SECURITY.md         operator security checklist
 docs/TROUBLESHOOTING.md  setup and failure playbook
@@ -378,7 +396,7 @@ ROADMAP.md               item-by-item status for both production addenda
 ## Testing and evals
 
 ```bash
-pytest -q          # 483 tests
+pytest -q          # 496 tests
 omniforge eval     # 5 goal-level cases with explicit checks
 ruff check .       # lint
 ```
