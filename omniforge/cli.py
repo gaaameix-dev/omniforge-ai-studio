@@ -365,9 +365,26 @@ def _cmd_users(args, settings: Settings) -> int:
     return 0
 
 
+def _cmd_ui_audit(args, settings: Settings) -> int:
+    from .core.ui_audit import audit
+
+    report = audit()
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return 0 if report["score"] >= 0.8 else 1
+    print(f"ui audit: {report['passed']}/{report['total']} checks (score {report['score']})")
+    for check in report["checks"]:
+        mark = "ok  " if check["ok"] else "FAIL"
+        print(f"  [{mark}] {check['check']:<18} {check['detail'][:50]}")
+    return 0 if report["score"] >= 0.8 else 1
+
+
 def _cmd_verify(args, settings: Settings) -> int:
     """Live checks: every configured provider is asked one real question."""
     from .core.integrations import Integrations
+
+    if getattr(args, "live", False):
+        return _verify_live(settings)
 
     settings_obj = settings
     statuses = asyncio.run(Integrations(settings_obj).verify_all()) if hasattr(
@@ -379,6 +396,85 @@ def _cmd_verify(args, settings: Settings) -> int:
         mark = {"connected": "ok", "not_configured": "--", "error": "!!"}.get(status["status"], "??")
         print(f"  [{mark}] {status['label']:22s} {status['status']:15s} {status['detail'][:60]}")
     return 0 if all(s["status"] in {"connected", "not_configured"} for s in statuses) else 1
+
+
+def _verify_live(settings: Settings) -> int:
+    """Actually call each configured provider once and print the round trip."""
+    import asyncio as _asyncio
+
+    from .core.embeddings import EmbeddingProvider
+    from .core.llm import build_llm
+    from .core.media import ImageProvider, SpeechProvider
+    from .core.media_jobs import JobMediaProvider
+
+    results: list[tuple[str, bool, str]] = []
+
+    async def check_llm() -> None:
+        llm = build_llm(settings)
+        if getattr(llm, "name", "mock") == "mock":
+            results.append(("llm", False, "mock backend: set OMNIFORGE_LLM_API_KEY"))
+            return
+        try:
+            response = await llm.complete("Reply with one word.", "ping")
+            results.append(("llm", bool(response.text), response.text[:40]))
+        except Exception as exc:  # noqa: BLE001
+            results.append(("llm", False, f"{type(exc).__name__}: {exc}"[:80]))
+
+    async def check_image() -> None:
+        provider = ImageProvider(settings.media_api_key, model=settings.media_model,
+                                 base_url=settings.media_base_url)
+        if not provider.enabled:
+            results.append(("image", False, "no OMNIFORGE_MEDIA_API_KEY"))
+            return
+        try:
+            payload = await provider.generate("a plain grey square", size="512x512")
+            results.append(("image", len(payload) > 100, f"{len(payload)} bytes"))
+        except Exception as exc:  # noqa: BLE001
+            results.append(("image", False, f"{type(exc).__name__}: {exc}"[:80]))
+
+    async def check_speech() -> None:
+        provider = SpeechProvider(settings.media_api_key, base_url=settings.media_base_url)
+        if not provider.enabled:
+            results.append(("speech", False, "no OMNIFORGE_MEDIA_API_KEY"))
+            return
+        try:
+            payload = await provider.speak("hello")
+            results.append(("speech", len(payload) > 100, f"{len(payload)} bytes"))
+        except Exception as exc:  # noqa: BLE001
+            results.append(("speech", False, f"{type(exc).__name__}: {exc}"[:80]))
+
+    async def check_jobs() -> None:
+        provider = JobMediaProvider(settings.media_job_url, settings.media_job_key)
+        results.append(("media-jobs", provider.enabled,
+                        "configured" if provider.enabled else "no OMNIFORGE_MEDIA_JOB_URL"))
+
+    async def check_embeddings() -> None:
+        provider = EmbeddingProvider(settings.embedding_api_key, model=settings.embedding_model,
+                                     base_url=settings.llm_base_url)
+        if not provider.enabled:
+            results.append(("embeddings", False, "no OMNIFORGE_EMBEDDING_API_KEY"))
+            return
+        try:
+            vectors = await provider.embed(["ping"])
+            results.append(("embeddings", bool(vectors and vectors[0]),
+                            f"{len(vectors[0])} dims"))
+        except Exception as exc:  # noqa: BLE001
+            results.append(("embeddings", False, f"{type(exc).__name__}: {exc}"[:80]))
+
+    async def run_all() -> None:
+        await _asyncio.gather(check_llm(), check_image(), check_speech(), check_jobs(),
+                              check_embeddings())
+
+    _asyncio.run(run_all())
+    failures = 0
+    for name, ok, detail in results:
+        mark = "ok  " if ok else "--  "
+        if not ok and "no OMNIFORGE" not in detail and "mock backend" not in detail:
+            failures += 1
+        print(f"  [{mark}] {name:<12} {detail}")
+    configured = sum(1 for _, ok, _ in results if ok)
+    print(f"live: {configured}/{len(results)} providers answered")
+    return 0 if failures == 0 else 1
 
 
 def _cmd_tenants(args, settings: Settings) -> int:
@@ -672,8 +768,13 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("metrics", help="storage counters as JSON")
 
+    p_ui = sub.add_parser("ui-audit", help="static accessibility and responsiveness audit")
+    p_ui.add_argument("--json", action="store_true")
+
     p_verify = sub.add_parser("verify", help="live checks for every configured provider")
     p_verify.add_argument("--json", action="store_true")
+    p_verify.add_argument("--live", action="store_true",
+                          help="actually call each configured provider once")
 
     p_tenants = sub.add_parser("tenants", help="list, create or drop tenant schemas")
     p_tenants.add_argument("--create", metavar="NAME")
@@ -759,6 +860,7 @@ def main(argv: list[str] | None = None) -> int:
         "worker": lambda: _cmd_worker(args, settings),
         "completions": lambda: _cmd_completions(args, settings),
         "verify": lambda: _cmd_verify(args, settings),
+        "ui-audit": lambda: _cmd_ui_audit(args, settings),
         "tenants": lambda: _cmd_tenants(args, settings),
         "db": lambda: _cmd_db(args, settings),
         "alerts": lambda: _cmd_alerts(args, settings),
