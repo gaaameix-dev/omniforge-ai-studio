@@ -116,7 +116,7 @@ class Orchestrator:
     def describe(self) -> dict[str, Any]:
         return {
             "framework": "OmniForge AI Studio",
-            "version": "0.7.0",
+            "version": "0.8.0",
             "backend": self.llm.name,
             "live_mode": self.settings.live_mode,
             "departments": [
@@ -154,6 +154,7 @@ class Orchestrator:
         priority: int = 5,
         idempotency_key: str | None = None,
         workspace_id: str | None = None,
+        enqueue: bool | None = None,
     ) -> Run:
         if not goal or not goal.strip():
             raise ValueError("goal must not be empty")
@@ -181,6 +182,13 @@ class Orchestrator:
             price_per_1k_input=self.settings.price_per_1k_input,
             price_per_1k_output=self.settings.price_per_1k_output,
         )
+        queued = getattr(self.settings, "worker_mode", False) if enqueue is None else enqueue
+        if queued:
+            run.status = RunStatus.QUEUED
+            self._save(run)
+            self.metrics.inc("runs.queued")
+            await self.bus.emit("run.queued", run_id=run.id, payload={"goal": run.goal})
+            return run
         self._save(run)
         self.metrics.set("runs_in_memory", len(self.runs))
         self.metrics.inc("runs.submitted")
@@ -726,10 +734,41 @@ class Orchestrator:
             )
             feedback: str | None = None
 
+            async def debate_candidates(context: str) -> tuple[str, float | None]:
+                """Run N independent candidates and keep the best reviewed one."""
+                count = max(1, int(getattr(self.settings, "debate_candidates", 1)))
+                results: list[tuple[str, float]] = []
+                for _ in range(count):
+                    candidate = await agent.execute(
+                        task, run, context,
+                        feedback=feedback,
+                        delegate=lambda spec: self._delegate(run, task, spec),
+                        tool=self._tool_for(run, template),
+                        retrieved=context,
+                    )
+                    review = await self.reviewer.review(
+                        task, candidate, self.skills.get(task.skill), context
+                    )
+                    results.append((candidate, review.score))
+                best_output, best_score = max(results, key=lambda item: item[1])
+                await self.bus.emit(
+                    "task.debated", run_id=run.id, task_id=task.id,
+                    payload={"title": task.title, "candidates": count,
+                             "scores": [round(score, 3) for _, score in results],
+                             "chosen": round(best_score, 3)},
+                )
+                self.metrics.observe("debate.candidates", count)
+                return best_output, best_score
+
             async def attempt(_attempt_no: int) -> str:
                 nonlocal feedback
                 task.attempts += 1
                 context = self._context_for(run, task)
+                if (self.settings.review_enabled
+                        and int(getattr(self.settings, "debate_candidates", 1)) > 1):
+                    output, score = await debate_candidates(context)
+                    task.review_score = score
+                    return output
                 output = await agent.execute(
                     task, run, context,
                     feedback=feedback,
