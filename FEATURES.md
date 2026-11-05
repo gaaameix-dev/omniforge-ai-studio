@@ -7,7 +7,7 @@ Legend: **Implemented** (code exists and runs) · **Tested** (covered by
 Single source of truth: `omniforge doctor`, `GET /api/integrations`,
 `GET /api/media` and `GET /api/db` report the same state at runtime.
 
-Numbers at this build: **537 tests**, 83% line coverage, 136 routes, 13 dashboard
+Numbers at this build: **551 tests**, 83% line coverage, 136 routes, 13 dashboard
 views, 126 i18n keys (en/hi), 5/5 eval cases.
 
 ## Core orchestration
@@ -76,7 +76,7 @@ views, 126 i18n keys (en/hi), 5/5 eval cases.
 | **Image generation** | Yes | Yes | Needs key | OpenAI-compatible `/images/generations` |
 | **Unity / Unreal / Godot scaffolding** | Yes | Yes | Yes | text project skeletons; nothing is compiled |
 | Video / music / 3D generation | Yes | Yes | Needs key | job-API adapter + glTF validator |
-| Engine builds (Unity/Unreal/Godot) | Yes | Yes | Needs the engine | CLI runner with timeout and log |
+| Engine builds (Unity/Unreal/Godot) | Yes | Yes (Godot verified) | Needs the engine | CLI runner + headless project validation |
 
 ## Automation
 
