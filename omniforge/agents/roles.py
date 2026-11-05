@@ -25,6 +25,12 @@ ROLE_PERMISSIONS: dict[str, tuple[str, ...]] = {
     "Automation Test Engineer": ("code.exec",),
     "QA Engineer": ("code.exec",),
     "Security Tester": ("code.exec",),
+    "Graphic Designer": ("media.generate",),
+    "Concept Artist": ("media.generate",),
+    "VFX Artist": ("media.generate",),
+    "Texture Artist": ("media.generate",),
+    "Storyboard Artist": ("media.generate",),
+    "Game Designer": ("media.generate",),
 }
 
 # Words that mean the same thing on the role side and the skill side, so
