@@ -61,11 +61,31 @@ class ProjectMemberRequest(BaseModel):
     role: str = "viewer"
 
 
+class KnowledgeDocument(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    text: str = Field(max_length=20000)
+
+
+class KnowledgeImportRequest(BaseModel):
+    documents: list[KnowledgeDocument] = Field(min_length=1, max_length=200)
+    run_id: str | None = None
+
+
 class ProjectQuotaRequest(BaseModel):
     tokens: int = Field(ge=0)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
+    def _require_role(identity, action: str) -> None:
+        if identity is None:
+            return
+        if not auth_core.allows(identity.role, action):
+            raise HTTPException(status_code=403,
+                                detail=f"role '{identity.role}' cannot {action}")
+
+    def _require_manage(identity) -> None:
+        _require_role(identity, "manage")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         cfg = settings or Settings.from_env()
@@ -363,6 +383,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"project_id": project_id, "token_quota": req.tokens,
                 "tokens_used": app.state.store.project_usage_tokens(project_id)}
 
+    @app.post("/api/knowledge/import", status_code=201)
+    async def knowledge_import(req: KnowledgeImportRequest, request: Request) -> dict:
+        identity = getattr(request.state, "identity", None)
+        if identity is not None:
+            _require_manage(identity)
+        added, skipped = 0, 0
+        o = orch()
+        for document in req.documents:
+            text = (document.text or "").strip()
+            if not text:
+                skipped += 1
+                continue
+            o.knowledge.add(req.run_id or "manual", document.title[:200], text[:20000],
+                            auth_core.utcnow())
+            added += 1
+        app.state.store.add_audit(getattr(identity, "email", None), "knowledge.imported", None,
+                                  f"{added} documents", None, auth_core.utcnow())
+        return {"added": added, "skipped": skipped, "total": len(req.documents)}
+
     @app.get("/api/knowledge/search")
     async def knowledge_search(q: str, limit: int = 5, mode: str = "lexical") -> dict:
         o = orch()
@@ -519,6 +558,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/runs/{run_id}/approvals")
     async def approvals(run_id: str) -> list[dict]:
         return orch().pending_approvals(run_id)
+
+    @app.post("/api/runs/{run_id}/tasks/{task_id}/cancel")
+    async def cancel_task(run_id: str, task_id: str, request: Request) -> dict:
+        identity = getattr(request.state, "identity", None)
+        _require_role(identity, "run")
+        try:
+            result = await orch().cancel_task(run_id, task_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        if identity is not None:
+            app.state.store.add_audit(identity.email, "task.cancelled", task_id, run_id, None,
+                                      auth_core.utcnow())
+        return result
 
     @app.post("/api/runs/{run_id}/approvals/{task_id}")
     async def decide(run_id: str, task_id: str, req: ApprovalRequest) -> dict:
