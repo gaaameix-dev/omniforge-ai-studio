@@ -365,6 +365,46 @@ def _cmd_users(args, settings: Settings) -> int:
     return 0
 
 
+def _cmd_verify(args, settings: Settings) -> int:
+    """Live checks: every configured provider is asked one real question."""
+    from .core.integrations import Integrations
+
+    settings_obj = settings
+    statuses = asyncio.run(Integrations(settings_obj).verify_all()) if hasattr(
+        Integrations, "verify_all") else []
+    if not statuses:
+        statuses = [asyncio.run(Integrations(settings_obj).verify(key))
+                    for key in ("llm", "github", "mcp", "sqlite", "sandbox", "http")]
+    for status in statuses:
+        mark = {"connected": "ok", "not_configured": "--", "error": "!!"}.get(status["status"], "??")
+        print(f"  [{mark}] {status['label']:22s} {status['status']:15s} {status['detail'][:60]}")
+    return 0 if all(s["status"] in {"connected", "not_configured"} for s in statuses) else 1
+
+
+def _cmd_tenants(args, settings: Settings) -> int:
+    from .core.pg import PostgresUnavailable
+    from .core.tenancy import TenantError, create_tenant, drop_tenant, list_tenants
+
+    url = settings.db_url
+    if not url.startswith(("postgres://", "postgresql://")):
+        print("tenants need a PostgreSQL backend (set OMNIFORGE_DB_URL)")
+        return 2
+    try:
+        if args.create:
+            print(json.dumps(create_tenant(url, args.create), indent=2))
+        elif args.drop:
+            print(json.dumps(drop_tenant(url, args.drop), indent=2))
+        else:
+            tenants = list_tenants(url)
+            print(f"{len(tenants)} tenant schema(s)")
+            for tenant in tenants:
+                print("  ", tenant["schema"])
+    except (TenantError, PostgresUnavailable) as exc:
+        print(f"error: {exc}")
+        return 2
+    return 0
+
+
 def _cmd_completions(args, settings: Settings) -> int:
     """Print a shell completion script for the CLI commands."""
     commands = sorted({
@@ -500,6 +540,11 @@ def _cmd_plugins(args, settings: Settings) -> int:
     from .core import plugins as plugin_core
 
     store = RunStore(settings.db_path)
+    if args.index:
+        index = plugin_core.build_index(store, settings.data_dir, settings,
+                                        base_url=args.base_url)
+        print(json.dumps(index, indent=2))
+        return 0
     if args.install:
         payload = pathlib.Path(args.install).read_bytes()
         try:
@@ -627,6 +672,13 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("metrics", help="storage counters as JSON")
 
+    p_verify = sub.add_parser("verify", help="live checks for every configured provider")
+    p_verify.add_argument("--json", action="store_true")
+
+    p_tenants = sub.add_parser("tenants", help="list, create or drop tenant schemas")
+    p_tenants.add_argument("--create", metavar="NAME")
+    p_tenants.add_argument("--drop", metavar="NAME")
+
     p_comp = sub.add_parser("completions", help="print a shell completion script")
     p_comp.add_argument("shell", choices=["bash", "zsh"], nargs="?", default="bash")
 
@@ -658,6 +710,9 @@ def main(argv: list[str] | None = None) -> int:
     p_plugins.add_argument("--enable", metavar="ID")
     p_plugins.add_argument("--disable", metavar="ID")
     p_plugins.add_argument("--remove", metavar="ID")
+    p_plugins.add_argument("--index", action="store_true",
+                           help="print a registry index of installed plugins")
+    p_plugins.add_argument("--base-url", default="", help="public base URL for index entries")
 
     p_auto = sub.add_parser("automation", help="list workflows, schedules or hooks")
     p_auto.add_argument("kind", choices=["workflows", "schedules", "hooks"])
@@ -703,6 +758,8 @@ def main(argv: list[str] | None = None) -> int:
         "metrics": lambda: _cmd_metrics(args, settings),
         "worker": lambda: _cmd_worker(args, settings),
         "completions": lambda: _cmd_completions(args, settings),
+        "verify": lambda: _cmd_verify(args, settings),
+        "tenants": lambda: _cmd_tenants(args, settings),
         "db": lambda: _cmd_db(args, settings),
         "alerts": lambda: _cmd_alerts(args, settings),
         "loadtest": lambda: _cmd_loadtest(args, settings),
