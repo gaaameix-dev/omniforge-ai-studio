@@ -39,6 +39,8 @@ class Skill:
     handler_kind: str = "python"
     min_chars: int = 40
     required_any: tuple[str, ...] = ()
+    min_words: int = 0
+    must_contain: tuple[str, ...] = ()
 
     def render(self, task, context: str, goal: str = "", feedback: str | None = None) -> str:
         prompt = PROMPT_TEMPLATE.format(
@@ -73,5 +75,7 @@ def register_library(registry, specs: list[dict[str, Any]], handlers: dict[str, 
                 handler=handlers.get(spec["name"]),
                 min_chars=int(spec.get("min_chars", 40)),
                 required_any=tuple(spec.get("required_any", ())),
+                min_words=int(spec.get("min_words", 0)),
+                must_contain=tuple(spec.get("must_contain", ())),
             ),
         )
