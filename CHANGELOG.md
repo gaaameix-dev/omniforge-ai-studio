@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.0
+
+Added
+- `skills/generators.py`: a deterministic implementation for all 51 shipped skills.
+  Before this release only 9 had real code and 42 were prompt-only, so a mock run
+  produced placeholders; now every skill writes a real artifact - a spec, table,
+  checklist or code skeleton - with no model call.
+- `OMNIFORGE_PREFER_GENERATORS` (default true) chooses between the deterministic
+  implementation and the model path; a mock model always uses the generator.
+- Artifacts no longer stack two top-level headings.
+
+Changed
+- `register_library` falls back to a generator when a skill has no explicit handler,
+  so adding a skill still means one dict entry.
+
+Tests
+- 356 → 483; `tests/test_skills.py` asserts every skill produces >= 120 chars of
+  structured output, is deterministic, and contains its domain-specific markers.
+
 ## 0.8.0
 
 Added
