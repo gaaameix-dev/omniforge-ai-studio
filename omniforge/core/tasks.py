@@ -27,6 +27,7 @@ class TaskStatus(str, Enum):
 
 
 class RunStatus(str, Enum):
+    QUEUED = "queued"
     PLANNING = "planning"
     RUNNING = "running"
     AWAITING_APPROVAL = "awaiting_approval"
