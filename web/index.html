@@ -152,6 +152,7 @@
   <button data-v="automation"><i>⚡</i><span data-i18n="nav.automation">Automation</span></button>
   <button data-v="monitor"><i>◐</i><span data-i18n="nav.monitor">Monitor</span></button>
   <button data-v="usage"><i>₹</i><span data-i18n="nav.usage">Usage</span></button>
+  <button data-v="settings"><i>⚙</i><span data-i18n="nav.settings">Settings</span></button>
   <button data-v="security"><i>⛨</i><span data-i18n="nav.security">Security</span></button>
   <button data-v="logs"><i>≡</i><span data-i18n="nav.logs">Logs</span></button>
 </nav>
@@ -202,6 +203,13 @@
           <div id="artifacts"><div class="empty">none yet</div></div>
         </div>
         <div class="panel" style="margin-top:12px">
+          <h2><span data-i18n="chat.stream">Live model output</span> <span class="chip" id="live-agent"></span></h2>
+          <div id="live" class="scroll" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;min-height:60px;max-height:220px"><span class="muted">nothing streaming</span></div>
+        </div>
+        <div class="panel">
+          <h2><span data-i18n="chat.stream">Live model output</span>
+            <span class="chip" id="live-agent"></span></h2>
+          <div id="live" class="scroll" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;min-height:54px;max-height:180px"><span class="muted">nothing streaming</span></div>
           <h2 data-i18n="chat.events">Live events</h2>
           <div id="log"><div class="empty">waiting for a run…</div></div>
         </div>
@@ -321,6 +329,8 @@
         <button id="b-save" data-i18n="b.save">Save workflow</button>
       </div>
       <div id="b-tasks"><div class="empty" data-i18n="b.empty">no tasks yet</div></div>
+      <h2 style="margin-top:14px" data-i18n="b.graph">Dependency graph</h2>
+      <div id="b-graph"><div class="empty">-</div></div>
       <div class="muted" style="margin-top:10px">
         Conditions are declarative: <code>param=value</code> means "run this task only when
         that parameter equals the value". Use <code>param=*</code> for "exists".
@@ -429,6 +439,32 @@
           <h2 data-i18n="mon.health">Integration health</h2>
           <div id="mon-health"><div class="empty">-</div></div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================== SETTINGS ========================== -->
+  <section class="view" id="v-settings">
+    <div class="grid two">
+      <div class="panel">
+        <h2><span data-i18n="set.title">Runtime settings</span></h2>
+        <div class="muted" data-i18n="set.note">Overrides win over environment variables and apply immediately.</div>
+        <div id="set-form" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:10px">
+          <button id="set-save" data-i18n="set.save">Apply</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2><span data-i18n="set.routes">Team alert routes</span></h2>
+        <div class="row" style="margin-bottom:8px">
+          <input type="text" id="route-team" data-i18n-ph="set.team" placeholder="Team" style="max-width:130px" />
+          <select id="route-channel" style="max-width:110px">
+            <option value="email">email</option><option value="webhook">webhook</option>
+          </select>
+          <input type="text" id="route-target" data-i18n-ph="set.target" placeholder="Email or webhook URL" style="max-width:230px" />
+          <button class="tiny" id="route-add" data-i18n="set.addroute">Add route</button>
+        </div>
+        <div id="route-list"><div class="empty" data-i18n="set.noroutes">no routes yet</div></div>
       </div>
     </div>
   </section>
@@ -697,6 +733,7 @@ document.querySelectorAll("#nav button").forEach(btn => {
     if (btn.dataset.v === "automation") loadAutomation();
     if (btn.dataset.v === "workspace") loadWorkspace();
     if (btn.dataset.v === "builder") renderBuilder();
+    if (btn.dataset.v === "settings") loadSettings();
     if (btn.dataset.v === "usage") loadUsage();
     window.scrollTo({top:0, behavior:"smooth"});
   };
@@ -736,7 +773,24 @@ async function loadFramework(){
 const STATUS_CLASS = {running:"s-running", done:"s-done", failed:"s-failed",
   skipped:"s-skipped", awaiting_approval:"s-awaiting_approval"};
 
+function streamDelta(ev){
+  const box = $("live");
+  if (!box) return;
+  const p = ev.payload || {};
+  if (p.agent) $("live-agent").textContent = p.agent;
+  if (box.querySelector(".muted")) box.innerHTML = "";
+  box.textContent += p.delta || "";
+  box.scrollTop = box.scrollHeight;
+}
+
 function logEvent(ev, target = "log"){
+  if (ev.type === "agent.token") { streamDelta(ev); return; }
+  if (ev.type === "task.started") {
+    const live = $("live");
+    if (live) live.innerHTML = "";
+    const chip = $("live-agent");
+    if (chip) chip.textContent = (ev.payload || {}).agent || "";
+  }
   const box = $(target);
   if (!box) return;
   if (box.querySelector(".empty")) box.innerHTML = "";
@@ -978,6 +1032,63 @@ $("verifyall").onclick = async () => {
 
 
 
+
+/* ----------------------------------------------------------- settings */
+async function loadSettings(){
+  try{
+    const data = await api("/api/settings");
+    const keys = data.tunable;
+    $("set-form").innerHTML = keys.map(key => {
+      const value = data.values[key];
+      const type = typeof value === "boolean" ? "checkbox" : typeof value === "number" ? "number" : "text";
+      const input = type === "checkbox"
+        ? `<input type="checkbox" data-key="${key}" ${value ? "checked" : ""} style="width:auto" />`
+        : `<input type="${type}" data-key="${key}" value="${value ?? ""}" />`;
+      const overridden = Object.prototype.hasOwnProperty.call(data.overrides, key);
+      return `<div class="row" style="margin-bottom:6px">
+        <label style="min-width:170px;font-size:12px" class="muted">${key}${overridden ? " *" : ""}</label>
+        ${input}</div>`;
+    }).join("");
+    const routes = await api("/api/alert-routes");
+    $("route-list").innerHTML = routes.routes.length ? routes.routes.map(r => `
+      <div class="item"><span class="g">${esc(r.team)} → ${esc(r.target)}</span>
+        <div class="m"><span class="chip">${esc(r.channel)}</span>
+          <button class="ghost tiny" onclick="deleteRoute('${esc(r.team)}')">×</button></div></div>`).join("")
+      : '<div class="empty" data-i18n="set.noroutes">no routes yet</div>';
+  }catch(e){ toast(e.message); }
+}
+
+$("set-save").onclick = async () => {
+  const values = {};
+  document.querySelectorAll("#set-form input").forEach(input => {
+    const key = input.dataset.key;
+    values[key] = input.type === "checkbox" ? input.checked
+      : input.type === "number" ? Number(input.value) : input.value;
+  });
+  try{
+    const out = await api("/api/settings", {method:"PATCH", body: JSON.stringify({values})});
+    toast("applied: " + Object.keys(out.applied).join(", "));
+    loadSettings();
+  }catch(e){ toast(e.message); }
+};
+
+$("route-add").onclick = async () => {
+  try{
+    await api("/api/alert-routes", {method:"POST", body: JSON.stringify({
+      team: $("route-team").value.trim(),
+      channel: $("route-channel").value,
+      target: $("route-target").value.trim(),
+    })});
+    $("route-team").value = ""; $("route-target").value = "";
+    loadSettings();
+  }catch(e){ toast(e.message); }
+};
+
+async function deleteRoute(team){
+  try{ await api("/api/alert-routes/" + encodeURIComponent(team), {method:"DELETE"}); loadSettings(); }
+  catch(e){ toast(e.message); }
+}
+
 /* ---------------------------------------------------------- workspace */
 let wsProject = "", wsFile = null;
 
@@ -1061,14 +1172,66 @@ $("ws-run").onclick = async () => {
   }catch(e){ $("ws-out").textContent = e.message; }
 };
 
+
+/* ------------------------------------------------------- builder graph */
+function renderGraph(){
+  const nodes = builderTasks;
+  const box = $("b-graph");
+  if (!nodes.length){ box.innerHTML = '<div class="empty">-</div>'; return; }
+  const byTitle = {};
+  nodes.forEach((t, i) => { byTitle[(t.title || "").trim()] = i; });
+  const depth = nodes.map(() => 0);
+  const edges = [];
+  nodes.forEach((t, i) => {
+    (t.depends || "").split(",").map(s => s.trim()).filter(Boolean).forEach(name => {
+      const j = byTitle[name];
+      if (j === undefined || j === i) return;
+      edges.push([j, i]);
+      depth[i] = Math.max(depth[i], depth[j] + 1);
+    });
+  });
+  const layers = {};
+  depth.forEach((d, i) => { (layers[d] = layers[d] || []).push(i); });
+  const W = 190, H = 46, GAP = 34;
+  const width = Math.max(...Object.keys(layers).map(k => k * (W + GAP))) + W + 20;
+  const rows = Math.max(...Object.values(layers).map(list => list.length));
+  const height = rows * (H + 16) + 20;
+  const pos = {};
+  Object.keys(layers).forEach(k => {
+    layers[k].forEach((index, row) => {
+      pos[index] = {x: 10 + k * (W + GAP), y: 10 + row * (H + 16)};
+    });
+  });
+  const lines = edges.map(([a, b]) => {
+    const from = pos[a], to = pos[b];
+    const x1 = from.x + W, y1 = from.y + H / 2, x2 = to.x, y2 = to.y + H / 2;
+    const mid = (x1 + x2) / 2;
+    return `<path d="M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}"
+      stroke="#2f4a68" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>`;
+  }).join("");
+  const rects = nodes.map((t, i) => {
+    const {x, y} = pos[i];
+    return `<g><rect x="${x}" y="${y}" rx="8" width="${W}" height="${H}"
+      fill="#161f2d" stroke="#2b3d52"/>
+      <text x="${x + 10}" y="${y + 19}" fill="#e7eef7" font-size="11">${esc((t.title || "").slice(0, 24))}</text>
+      <text x="${x + 10}" y="${y + 35}" fill="#8ba0b8" font-size="10">${esc(t.department || "")}</text></g>`;
+  }).join("");
+  box.innerHTML = `<svg width="${width}" height="${height}" role="img" aria-label="workflow dependency graph">
+    <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6"
+      orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f4a68"/></marker></defs>
+    ${lines}${rects}</svg>`;
+}
+
 /* ------------------------------------------------------------ builder */
 let builderTasks = [];
 
 function renderBuilder(){
   if (!builderTasks.length){
     $("b-tasks").innerHTML = '<div class="empty" data-i18n="b.empty">no tasks yet</div>';
+    renderGraph();
     return;
   }
+  renderGraph();
   $("b-tasks").innerHTML = builderTasks.map((t, i) => `
     <div class="item">
       <div class="row">
