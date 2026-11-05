@@ -117,7 +117,11 @@ class Agent:
             tool=tool, retrieved=retrieved,
         )
 
-        if skill.handler is not None:
+        prefer = getattr(self, "prefer_generators", True)
+        use_handler = skill.handler is not None and (
+            prefer or getattr(self.llm, "name", "") == "mock"
+        )
+        if use_handler:
             result = skill.handler(ctx)
             if inspect.isawaitable(result):
                 result = await result
