@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 log = logging.getLogger("omniforge.scheduler")
 
@@ -91,6 +92,21 @@ class Scheduler:
         run = None
         error = None
         try:
+            if (schedule.get("job") or "run") == "backup":
+                from .backup import create_backup
+
+                data_dir = Path(self.orchestrator.settings.data_dir)
+                archive = create_backup(data_dir)
+                self.store.add_audit(None, "backup.scheduled", str(archive.get("archive")),
+                                     f"{archive.get('files')} files", None, now)
+                run = None
+                return {
+                    "schedule_id": schedule["id"],
+                    "run_id": None,
+                    "backup": archive.get("archive"),
+                    "next_run_at": compute_next(schedule, parse(now)),
+                    "error": None,
+                }
             if schedule.get("workflow_id"):
                 workflow = self.store.get_workflow(schedule["workflow_id"])
                 if workflow is None:
