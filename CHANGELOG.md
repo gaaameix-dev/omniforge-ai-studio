@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.0
+
+Added
+- Token streaming: `BaseLLM.stream`, real SSE parsing for OpenAI-compatible
+  endpoints, `agent.token` events (throttled), and a live output box in the chat view.
+- Task-level cancellation: `POST /api/runs/{id}/tasks/{task_id}/cancel` discards a
+  running attempt and skips dependents.
+- Runtime settings: 11 allow-listed keys in a database table, `GET/PATCH /api/settings`
+  and a Settings view; changes apply to the running orchestrator immediately.
+- Per-team alert routing: `alert_routes` plus `/api/alert-routes`; rules with a team
+  use that channel and target.
+- Bulk knowledge import: `POST /api/knowledge/import` (up to 200 documents).
+- Self-hostable marketplace: `/api/plugins/index` publishes an index with checksums,
+  `/api/plugins/{id}/export` hands out the package.
+- Speech generation: `SpeechProvider` and `/api/media/speech` (OpenAI-compatible).
+- Workflow dependency graph: an SVG view in the Builder.
+- Release workflow: `.github/workflows/release.yml` builds a wheel and pushes a GHCR
+  image on a tag (PyPI publish activates when `PYPI_API_TOKEN` is set).
+- Tests: 483 → 496.
+
+Fixed
+- Alert rules now persist their `team` column.
+- Plugin index/export resolve the manifest through the recorded path.
+- Persistence failures during shutdown are logged instead of crashing a run.
+
 ## 0.9.0
 
 Added
