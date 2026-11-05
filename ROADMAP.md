@@ -6,7 +6,7 @@ credential is missing, the line says so.
 
 Legend: **I** implemented · **T** tested · **C** connected here · **P** partial · **N** pending
 
-Counts at this build: 328 automated tests · 83% line coverage · 51 shipped skills · 120 agent roles ·
+Counts at this build: 356 automated tests · 83% line coverage · 51 shipped skills · 120 agent roles ·
 15 built-in tools · 10 departments · 11 dashboard views.
 
 ---
@@ -50,6 +50,12 @@ Everything below was previously PENDING or PARTIAL and is now working and tested
 | Plugin install from HTTPS URL | I · T | `/api/plugins/install-url` |
 | Signature-only plugin mode | I · T | `OMNIFORGE_PLUGIN_REQUIRE_SIGNATURE` |
 | PostgreSQL mirror (verified) | I · T · C | `core/pgmirror.py`, tested against PostgreSQL 16 |
+| **Native PostgreSQL store** | I · T · C | `core/store_pg.py`, `OMNIFORGE_DB_URL`, full run lifecycle on PG 16 |
+| **Multi-agent debate / voting** | I · T | `DEBATE_CANDIDATES`, `task.debated` events |
+| **Image generation** | I · T (needs key) | `core/media.py`, `/api/media/image` |
+| **Unity / Unreal / Godot scaffolding** | I · T | `core/engines.py`, `/api/engines/scaffold` |
+| **Per-provider cost caps** | I · T | `PROVIDER_BUDGETS`, `/api/billing/providers` |
+| **Queue-backed workers** | I · T | `core/worker.py`, `omniforge worker`, lease claim |
 | Alert rules (metric/threshold/cooldown) | I · T · C | `core/alerts.py`, `/api/alert-rules` |
 | Plugin registry index | I · T | `core/plugin_registry.py`, checksum verified |
 | LLM content classifier | I · T (needs key) | `LlmModerator`, off by default |
@@ -255,9 +261,9 @@ Everything below was previously PENDING or PARTIAL and is now working and tested
 
 | Item | Why it is open |
 |---|---|
-| Native PostgreSQL store | mirror is verified; making PostgreSQL the primary store needs a dialect shim in `RunStore` |
+| Video / audio / 3D generation | needs providers; image generation is wired |
 | Vector embeddings | hybrid BM25 + cosine shipped; a dedicated vector DB is still open |
-| Distributed workers / external queue | deliberate: in-process until load demands otherwise; the load harness shows headroom |
+| External broker (Redis/SQS) | workers now claim from the database; a broker is only needed beyond one database |
 | Hosted plugin registry service | index format + checksum verification shipped; hosting one is an ops task |
 | Node-graph workflow canvas | form-based builder shipped |
 | Drag-and-drop workflow canvas | the Builder view is form-based; a node canvas is a front-end project |
