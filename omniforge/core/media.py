@@ -105,8 +105,10 @@ def status(settings) -> dict:
         "image_generation": bool(getattr(settings, "media_api_key", "")),
         "model": getattr(settings, "media_model", ""),
         "speech_generation": bool(getattr(settings, "media_api_key", "")),
-        "video_generation": False,
-        "music_generation": False,
-        "model_3d_generation": False,
-        "note": "only image generation has a provider wired; the rest is not implemented",
+        "video_generation": bool(getattr(settings, "media_job_url", "")),
+        "music_generation": bool(getattr(settings, "media_job_url", "")),
+        "model_3d_generation": bool(getattr(settings, "media_job_url", "")),
+        "media_job_url": bool(getattr(settings, "media_job_url", "")),
+        "note": ("image + speech use OpenAI-compatible endpoints; video, music and 3D "
+                 "use the job API in core/media_jobs.py"),
     }
