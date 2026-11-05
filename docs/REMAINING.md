@@ -7,10 +7,20 @@ Legend **Needs**: `key` = paid credential · `hardware` = device or farm · `ops
 hosted service/registry · `decision` = a product choice · `—` = just work.
 Size: **S** < 1 day · **M** a few days · **L** a week+.
 
-Baseline: 51/51 skills deterministic · 120 agent roles · 16 tools · 157 HTTP routes ·
-14 dashboard views · 29 CLI commands · 537 tests.
+Baseline: 51/51 skills deterministic · 120 agent roles · 16 tools · 160 HTTP routes ·
+14 dashboard views · 32 CLI commands · 551 tests (+1 skipped without Godot).
 
 ---
+
+## Closed in 1.3.0
+
+| Was | Item | What changed |
+|---|---|---|
+| A6 | Engine validation | `core/engine_build.validate` opens a scaffolded project headless; **verified against real Godot 4.2.2** - a generated project opens with exit 0 and no script errors. `scripts/install_godot.sh` reproduces it. Unity/Unreal still need their own installers. |
+| B3 | Mobile layout | Static UI audit (`core/ui_audit.py`, `omniforge ui-audit`, `/api/ui-audit`) checks viewport, breakpoints, touch targets, focus, live regions, language, skip link and fixed widths: 10/10 on the shipped dashboard |
+| B7 | Vector search | pgvector backend with an HNSW index (`core/vector_pg.py`, `OMNIFORGE_VECTOR_BACKEND`, `/api/vectors`), verified against PostgreSQL 16 + pgvector 0.6.2 |
+| B18 | Tracing depth | Tool-level and LLM-call spans with token counts, alongside task spans |
+| C1-C5 | Live verification | `omniforge verify --live` performs one real call per configured provider (model, image, speech, job media, embeddings) and reports exactly what is missing |
 
 ## Closed in 1.2.0
 
@@ -37,24 +47,23 @@ completions, draggable graph, accessibility pass.
 
 | # | Item | Current state | What is missing | Needs | Size |
 |---|---|---|---|---|---|
-| A5 | Physical Android/iOS testing | CSS + structural checks only | A device or browser farm in CI; the dashboard is responsive but untested on hardware | hardware / key | M |
-| A6 | Engine *runs* without the engine | Build command wired, availability reported | An installed Unity/Unreal/Godot to actually compile a scaffold | hardware | L |
+| A5 | Physical device testing | Static UI audit passes 10/10; a Playwright Chromium is present but cannot launch here (no system libs) | A device, or a browser farm in CI where Chromium runs | hardware | M |
+| A6b | Unity / Unreal builds | Godot validated end to end | Those two engines installed (their installers need a licence/account) | hardware | L |
 | A10 | Multi-region replication | Leader lease + readiness done | Database replication, cross-region failover, traffic policy | ops | L |
 
 ## B. Built, but limited
 
 | # | Item | Current state | What is missing | Needs | Size |
 |---|---|---|---|---|---|
-| B3 | Mobile layout | 6 media queries, mobile-first CSS | Safe-area insets and real-device verification (see A5) | hardware | S |
-| B7 | Retrieval | Hybrid BM25 + cosine over SQLite vectors | A vector database with an ANN index; re-embedding on model change | decision | M |
-| B18 | Tracing depth | Task-level spans | Tool-level and LLM-call spans, sampling, an OTel collector config | — | S |
+| B20 | iOS safe areas | Mobile-first CSS, no `env(safe-area-inset-*)` | Safe-area insets for notched devices (needs a real device to confirm) | hardware | S |
+| B21 | Tracing export | Spans kept in-process, optional OTel bridge | A collector config, sampling policy, and retention | decision | S |
 | B19 | Settings coverage | 24 of 78 keys are tunable | The rest are credentials and paths that should stay env-only | — | — |
 
 ## C. Code ready — waiting on credentials or infrastructure
 
 | # | Item | Current state | What is missing | Needs | Size |
 |---|---|---|---|---|---|
-| C1 | Live model | Adapters tested against mock transports | A provider key, then one smoke run per provider (`omniforge verify`) | key | S |
+| C1 | Live model | `omniforge verify --live` does one real call | A provider key (`OMNIFORGE_LLM_API_KEY`) | key | S |
 | C2 | Image + speech | Endpoints implemented, mock-tested | `OMNIFORGE_MEDIA_API_KEY`; one real image and clip | key | S |
 | C3 | Video / music / 3D | Job adapter + validator, mock-tested | `OMNIFORGE_MEDIA_JOB_URL` pointing at a shim over your provider | key | S |
 | C4 | Embeddings | Hybrid search implemented | `OMNIFORGE_EMBEDDING_API_KEY`, then re-embed | key | S |
