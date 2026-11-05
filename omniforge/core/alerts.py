@@ -52,6 +52,15 @@ class AlertEngine:
         self.billing = billing
 
     # ------------------------------------------------------------------ rules
+    def resolve_target(self, rule: dict) -> tuple[str, str]:
+        """Return (channel, target), honouring a per-team route when one exists."""
+        team = rule.get("team")
+        if team:
+            route = self.store.alert_route_for(team)
+            if route:
+                return route["channel"], route["target"]
+        return rule["channel"], rule.get("target") or ""
+
     def create(self, **kwargs) -> dict:
         kwargs.setdefault("channel", "email")
         kwargs.setdefault("name", "rule")
@@ -77,6 +86,7 @@ class AlertEngine:
             "comparator": rule.comparator, "threshold": rule.threshold,
             "channel": rule.channel, "target": rule.target,
             "cooldown_seconds": rule.cooldown_seconds,
+            "team": (str(kwargs.get("team")).strip() or None) if kwargs.get("team") else None,
             "enabled": 1 if rule.enabled else 0, "created_at": rule.created_at,
         }
         self.store.add_alert_rule(data)
@@ -129,7 +139,8 @@ class AlertEngine:
                                  f"{rule['metric']}={value} {rule['comparator']} {rule['threshold']}",
                                  None, now)
             fired.append({"rule": rule["id"], "name": rule["name"], "metric": rule["metric"],
-                          "value": value, "channel": rule["channel"], **delivered})
+                          "value": value, "channel": rule["channel"],
+                          "team": rule.get("team"), **delivered})
         return fired
 
     def _in_cooldown(self, rule: dict, now: str) -> bool:
@@ -143,6 +154,7 @@ class AlertEngine:
         return elapsed < int(rule.get("cooldown_seconds") or 0)
 
     async def _deliver(self, rule: dict, value: float, run) -> dict[str, Any]:
+        channel, target = self.resolve_target(rule)
         subject = f"[OmniForge] alert: {rule['name']}"
         body = (
             f"Rule: {rule['name']} ({rule['id']})\n"
@@ -150,14 +162,14 @@ class AlertEngine:
             f"Observed: {value}\n"
             f"Run: {getattr(run, 'id', 'n/a')} {getattr(run, 'goal', '')[:120]}\n"
         )
-        if rule["channel"] == "webhook":
+        if channel == "webhook":
             if self.notifier is None or not self.notifier.enabled:
                 return {"delivered": False, "error": "no webhook configured"}
             result = await self.notifier.send({"event": "alert", "rule": rule["name"],
                                                "metric": rule["metric"], "value": value,
                                                "detail": body})
             return {"delivered": bool(result.get("ok")), "error": result.get("error")}
-        target = rule.get("target") or getattr(self.settings, "alert_email", "")
+        target = target or getattr(self.settings, "alert_email", "")
         if not target:
             return {"delivered": False, "error": "no alert email configured"}
         if self.mailer is None:
