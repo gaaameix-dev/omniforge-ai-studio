@@ -158,6 +158,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "/docs", "/openapi",
                     "/api/auth/register", "/api/auth/login",
                     "/api/auth/forgot", "/api/auth/reset",
+                    "/api/auth/oidc/login", "/api/auth/oidc/callback",
                 ))
                 # inbound webhooks carry their own secret token in the URL
                 or (path.startswith("/api/hooks/") and path.endswith("/trigger"))
@@ -227,6 +228,57 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/framework")
     async def framework() -> dict:
         return orch().describe()
+
+    @app.get("/api/traces")
+    async def traces(limit: int = 100, trace_id: str | None = None) -> dict:
+        o = orch()
+        return {"summary": o.tracer.summary(), "spans": o.tracer.recent(limit, trace_id)}
+
+    @app.get("/api/ready")
+    async def ready() -> dict:
+        """Readiness for a load balancer: database, queue and worker mode."""
+        o = orch()
+        checks = {"database": False, "queue": False}
+        try:
+            checks["database"] = o.store.stats() is not None
+        except Exception:  # noqa: BLE001
+            checks["database"] = False
+        try:
+            checks["queue"] = o.store.queued_count() >= 0
+        except Exception:  # noqa: BLE001
+            checks["queue"] = False
+        healthy = all(checks.values())
+        return {"ready": healthy, "checks": checks,
+                "worker_mode": bool(o.settings.worker_mode),
+                "backend": "postgres" if hasattr(o.store, "schema") else "sqlite"}
+
+    @app.get("/api/tenants")
+    async def tenants(request: Request) -> dict:
+        _require_role(getattr(request.state, "identity", None), "manage")
+        from ..core.pg import PostgresUnavailable
+        from ..core.tenancy import list_tenants
+
+        url = app.state.settings.db_url
+        if not url.startswith(("postgres://", "postgresql://")):
+            raise HTTPException(status_code=409, detail="tenants need a PostgreSQL backend")
+        try:
+            return {"tenants": list_tenants(url)}
+        except PostgresUnavailable as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+
+    @app.post("/api/tenants", status_code=201)
+    async def create_tenant_endpoint(payload: dict, request: Request) -> dict:
+        _require_role(getattr(request.state, "identity", None), "manage")
+        from ..core.pg import PostgresUnavailable
+        from ..core.tenancy import TenantError, create_tenant
+
+        url = app.state.settings.db_url
+        if not url.startswith(("postgres://", "postgresql://")):
+            raise HTTPException(status_code=409, detail="tenants need a PostgreSQL backend")
+        try:
+            return create_tenant(url, str(payload.get("tenant") or ""))
+        except (TenantError, PostgresUnavailable) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
 
     @app.get("/api/workers")
     async def workers() -> dict:
