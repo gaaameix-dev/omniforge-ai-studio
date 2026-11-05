@@ -7,7 +7,7 @@ Legend: **Implemented** (code exists and runs) · **Tested** (covered by
 Single source of truth: `omniforge doctor`, `GET /api/integrations`,
 `GET /api/media` and `GET /api/db` report the same state at runtime.
 
-Numbers at this build: **496 tests**, 83% line coverage, 136 routes, 13 dashboard
+Numbers at this build: **537 tests**, 83% line coverage, 136 routes, 13 dashboard
 views, 126 i18n keys (en/hi), 5/5 eval cases.
 
 ## Core orchestration
@@ -75,7 +75,8 @@ views, 126 i18n keys (en/hi), 5/5 eval cases.
 | Sandboxed code execution | Yes | Yes | Off by default | process isolation + rlimits |
 | **Image generation** | Yes | Yes | Needs key | OpenAI-compatible `/images/generations` |
 | **Unity / Unreal / Godot scaffolding** | Yes | Yes | Yes | text project skeletons; nothing is compiled |
-| Video / audio / 3D model generation | No | No | No | no provider wired — not claimed |
+| Video / music / 3D generation | Yes | Yes | Needs key | job-API adapter + glTF validator |
+| Engine builds (Unity/Unreal/Godot) | Yes | Yes | Needs the engine | CLI runner with timeout and log |
 
 ## Automation
 
@@ -141,7 +142,7 @@ views, 126 i18n keys (en/hi), 5/5 eval cases.
 | Single-task cancellation | Yes | Yes | Yes | `/api/runs/{id}/tasks/{task_id}/cancel` |
 | Expert-level prose from generators | Not built | generators produce structured first drafts (specs, tables, code skeletons), not domain-expert judgement |
 | Bulk knowledge import | Yes | Yes | Yes | `/api/knowledge/import`, up to 200 documents |
-| Settings screen (DB-backed config) | Yes | Yes | Yes | `/api/settings`, 11 tunable keys, applies live |
+| Settings screen (DB-backed config) | Yes | Yes | Yes | `/api/settings`, 24 tunable keys, applies live |
 | Docker image / PyPI release | Configured | Workflow only | Not published | `.github/workflows/release.yml` builds the wheel and pushes to GHCR on a tag; publishing needs registry secrets |
 
 ## Backlog
