@@ -116,7 +116,7 @@ class Orchestrator:
     def describe(self) -> dict[str, Any]:
         return {
             "framework": "OmniForge AI Studio",
-            "version": "0.8.0",
+            "version": "0.9.0",
             "backend": self.llm.name,
             "live_mode": self.settings.live_mode,
             "departments": [
@@ -732,6 +732,7 @@ class Orchestrator:
                 template, llm=self.llm, skills=self.skills, tools=self.tools,
                 bus=self.bus, blackboard=self.blackboard, budget=budget,
             )
+            agent.prefer_generators = bool(getattr(self.settings, "prefer_generators", True))
             feedback: str | None = None
 
             async def debate_candidates(context: str) -> tuple[str, float | None]:
@@ -1032,7 +1033,10 @@ class Orchestrator:
         for task in done:
             if task.result:
                 name = f"{task.department}_{task.skill}.md"
-                path = self.artifacts.write(run.id, name, f"# {task.title}\n\n{task.result}\n")
+                body = (task.result or "").strip()
+                # generators ship their own headings; do not stack two titles
+                content = body if body.startswith("# ") else f"# {task.title}\n\n{body}\n"
+                path = self.artifacts.write(run.id, name, content if content.endswith("\n") else content + "\n")
                 self._record_provenance(run, task, path, name)
         if self.billing is not None:
             try:
