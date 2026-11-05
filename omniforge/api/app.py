@@ -229,6 +229,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def framework() -> dict:
         return orch().describe()
 
+    @app.get("/api/vectors")
+    async def vector_status() -> dict:
+        from ..core.vector_pg import available as pgvector_available
+
+        cfg = app.state.settings
+        info = {"backend": "sqlite", "dim": cfg.embedding_dim,
+                "requested": cfg.vector_backend}
+        if cfg.db_url.startswith(("postgres://", "postgresql://")):
+            report = pgvector_available(cfg.db_url)
+            info["pgvector"] = report
+            if report.get("available") and cfg.vector_backend in {"auto", "pgvector"}:
+                info["backend"] = "pgvector"
+        return info
+
+    @app.get("/api/ui-audit")
+    async def ui_audit() -> dict:
+        from ..core.ui_audit import audit
+
+        return audit()
+
     @app.get("/api/traces")
     async def traces(limit: int = 100, trace_id: str | None = None) -> dict:
         o = orch()
