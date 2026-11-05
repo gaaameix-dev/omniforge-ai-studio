@@ -24,6 +24,18 @@ class SandboxRequest(BaseModel):
     timeout: float = Field(default=5.0, ge=0.5, le=30.0)
 
 
+class ImageRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=2000)
+    size: str = "1024x1024"
+
+
+class ScaffoldRequest(BaseModel):
+    engine: str
+    name: str = "MyGame"
+    genre: str = ""
+    notes: str = ""
+
+
 class LicenceRequest(BaseModel):
     licence: str = Field(min_length=1, max_length=200)
 
@@ -258,6 +270,60 @@ def register(app, *, orch) -> None:
         store().add_audit(identity.email, "sandbox.run", None,
                           f"exit={result.exit_code} timed_out={result.timed_out}", None, auth.utcnow())
         return result.to_dict()
+
+    # -------------------------------------------------------------- media
+    @app.get("/api/media")
+    async def media_status(request: Request) -> dict:
+        _require(_identity(request), "read")
+        from ..core.media import status
+
+        return status(settings())
+
+    @app.post("/api/media/image")
+    async def media_image(req: ImageRequest, request: Request) -> dict:
+        identity = _identity(request)
+        _require(identity, "run")
+        from ..core.media import ImageProvider, MediaError
+
+        provider = ImageProvider(settings().media_api_key, model=settings().media_model,
+                                 base_url=settings().media_base_url)
+        if not provider.enabled:
+            raise HTTPException(status_code=409,
+                                detail="image generation needs OMNIFORGE_MEDIA_API_KEY")
+        try:
+            payload = await provider.generate(req.prompt, size=req.size)
+        except MediaError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from None
+        folder = pathlib.Path(settings().data_dir) / "generated"
+        folder.mkdir(parents=True, exist_ok=True)
+        name = f"image_{auth.utcnow().replace(':', '').replace('-', '')}.png"
+        (folder / name).write_bytes(payload)
+        store().add_audit(identity.email, "media.image", name, f"{len(payload)}b", None,
+                          auth.utcnow())
+        return {"file": name, "bytes": len(payload), "prompt": req.prompt, "size": req.size}
+
+    # ------------------------------------------------------------ engines
+    @app.get("/api/engines")
+    async def engines(request: Request) -> dict:
+        _require(_identity(request), "read")
+        from ..core.engines import ENGINES
+
+        return {"engines": list(ENGINES),
+                "note": "text project skeletons; nothing is compiled or launched"}
+
+    @app.post("/api/engines/scaffold")
+    async def scaffold_project(req: ScaffoldRequest, request: Request) -> dict:
+        identity = _identity(request)
+        _require(identity, "run")
+        from ..core.engines import ENGINES, scaffold, summarise
+
+        if req.engine not in ENGINES:
+            raise HTTPException(status_code=400, detail=f"engine must be one of {list(ENGINES)}")
+        files = scaffold(req.engine, name=req.name, genre=req.genre, notes=req.notes)
+        store().add_audit(identity.email, "engine.scaffold", req.engine, req.name, None,
+                          auth.utcnow())
+        return {"engine": req.engine, "project": req.name, "files": files,
+                **summarise(files)}
 
     # ---------------------------------------------------------- moderation
     @app.get("/api/moderation")
