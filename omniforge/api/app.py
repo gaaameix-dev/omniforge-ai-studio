@@ -72,7 +72,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         skills = build_skill_registry()
         agents = build_agent_registry(skills)
         tools = build_tool_registry(str(cfg.data_dir), cfg)
-        store = RunStore(cfg.db_path)
+        if cfg.db_url:
+            from ..core.pg import store_from_url
+
+            store = store_from_url(cfg.db_url)
+        else:
+            store = RunStore(cfg.db_path)
         metrics = Metrics()
         app.state.settings = cfg
         app.state.store = store
@@ -202,6 +207,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/framework")
     async def framework() -> dict:
         return orch().describe()
+
+    @app.get("/api/workers")
+    async def workers() -> dict:
+        o = orch()
+        leased = [
+            {"run_id": run_id, "status": run.status.value}
+            for run_id, run in o.runs.items()
+            if run.status.value in {"queued", "running"}
+        ]
+        return {
+            "worker_mode": bool(o.settings.worker_mode),
+            "queued": o.store.queued_count(),
+            "in_memory": leased[:20],
+            "note": ("runs are queued; start a worker with `omniforge worker`"
+                     if o.settings.worker_mode else "runs execute inside the API process"),
+        }
 
     @app.get("/api/stats")
     async def stats() -> dict:
@@ -383,7 +404,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except PostgresUnavailable as exc:
             info["ok"] = False
             info["error"] = str(exc)
-        info["active"] = "sqlite"
+        info["active"] = ("postgres"
+                          if settings_now.db_url.startswith(("postgres://", "postgresql://"))
+                          else "sqlite")
         return info
 
     # ------------------------------------------------------------------ runs
@@ -407,6 +430,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             meta["user_id"] = identity_for_run.user_id
         try:
             app.state.billing.check_quota(meta.get("user_id"))
+            app.state.billing.check_provider_budget(app.state.settings.llm_model)
         except PermissionError as exc:
             raise HTTPException(status_code=402, detail=str(exc)) from None
         try:
