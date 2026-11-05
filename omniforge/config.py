@@ -78,6 +78,7 @@ class Settings:
 
     # --- debate ------------------------------------------------------------
     debate_candidates: int = 1           # >1 = run N candidates, keep the best
+    debate_judge: bool = True            # let a model pick, not only the review score
     prefer_generators: bool = True       # deterministic artifact over a model call
     stream_tokens: bool = True           # emit agent.token events while a model writes
 
@@ -151,6 +152,7 @@ class Settings:
     plugin_allow_unsigned: bool = True
     plugin_allowed_permissions: tuple[str, ...] = ("net.read", "fs.write", "github.read")
     plugin_require_signature: bool = False
+    plugin_public_key: str = ""          # base64 Ed25519 public key for publishers
 
     # --- alerts ------------------------------------------------------------
     alert_email: str = ""                # receives failure and quota alerts
@@ -195,6 +197,7 @@ class Settings:
             run_timeout=_float("OMNIFORGE_RUN_TIMEOUT", 0.0),
             fail_fast=_bool("OMNIFORGE_FAIL_FAST", True),
             debate_candidates=_int("OMNIFORGE_DEBATE_CANDIDATES", 1),
+            debate_judge=_bool("OMNIFORGE_DEBATE_JUDGE", True),
             prefer_generators=_bool("OMNIFORGE_PREFER_GENERATORS", True),
             stream_tokens=_bool("OMNIFORGE_STREAM_TOKENS", True),
             media_api_key=os.getenv("OMNIFORGE_MEDIA_API_KEY", "")
@@ -224,6 +227,7 @@ class Settings:
             db_url=os.getenv("OMNIFORGE_DB_URL", ""),
             plugins_enabled=_bool("OMNIFORGE_PLUGINS_ENABLED", True),
             plugin_require_signature=_bool("OMNIFORGE_PLUGIN_REQUIRE_SIGNATURE", False),
+            plugin_public_key=os.getenv("OMNIFORGE_PLUGIN_PUBLIC_KEY", ""),
             plugin_allow_unsigned=_bool("OMNIFORGE_PLUGIN_ALLOW_UNSIGNED", True),
             plugin_allowed_permissions=tuple(
                 p.strip() for p in os.getenv(
