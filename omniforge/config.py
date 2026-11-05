@@ -27,6 +27,16 @@ def _float(name: str, default: float) -> float:
         return default
 
 
+def _parse_engine_commands(raw: str) -> dict:
+    """'godot:godot --headless|unity:/opt/unity -batchmode' -> {engine: command}."""
+    commands: dict = {}
+    for chunk in (raw or "").split("|"):
+        name, _, command = chunk.partition(":")
+        if name.strip() and command.strip():
+            commands[name.strip().lower()] = command.strip()
+    return commands
+
+
 def _parse_budgets(raw: str) -> dict:
     """'openai:5,anthropic:10' -> {'openai': 5.0, 'anthropic': 10.0} (USD per month)."""
     budgets: dict = {}
@@ -86,6 +96,9 @@ class Settings:
     media_api_key: str = ""              # image generation (OpenAI-compatible)
     media_base_url: str = "https://api.openai.com/v1"
     media_model: str = "gpt-image-1"
+    media_job_url: str = ""              # job API for video / music / 3D
+    media_job_key: str = ""
+    engine_commands: dict = field(default_factory=dict)  # {"godot": "godot --headless ..."}
 
     # --- review loop -------------------------------------------------------
     review_enabled: bool = True
@@ -138,6 +151,14 @@ class Settings:
     user_monthly_tokens: int = 0         # 0 = no quota
     provider_budgets: dict = field(default_factory=dict)  # {"openai": 5.0, ...} USD/month
     worker_mode: bool = False            # enqueue runs instead of executing in-process
+    broker_url: str = ""                 # redis://… for a shared queue
+    worker_lease_seconds: int = 300
+    tenant: str = ""                     # schema-per-tenant name (PostgreSQL only)
+    otel: bool = False                   # mirror spans into OpenTelemetry if installed
+    oidc_issuer: str = ""                # generic OIDC login
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""
     model_prices: dict = field(default_factory=dict)   # {"model-prefix": [in_per_1m, out_per_1m]}
 
     # --- retrieval ---------------------------------------------------------
@@ -204,6 +225,9 @@ class Settings:
             or os.getenv("OPENAI_API_KEY", ""),
             media_base_url=os.getenv("OMNIFORGE_MEDIA_BASE_URL", "https://api.openai.com/v1"),
             media_model=os.getenv("OMNIFORGE_MEDIA_MODEL", "gpt-image-1"),
+            media_job_url=os.getenv("OMNIFORGE_MEDIA_JOB_URL", ""),
+            media_job_key=os.getenv("OMNIFORGE_MEDIA_JOB_KEY", ""),
+            engine_commands=_parse_engine_commands(os.getenv("OMNIFORGE_ENGINE_COMMANDS", "")),
             review_enabled=_bool("OMNIFORGE_REVIEW_ENABLED", True),
             review_min_chars=_int("OMNIFORGE_REVIEW_MIN_CHARS", 40),
             review_with_llm=_bool("OMNIFORGE_REVIEW_WITH_LLM", False),
@@ -220,6 +244,14 @@ class Settings:
             user_monthly_tokens=_int("OMNIFORGE_USER_MONTHLY_TOKENS", 0),
             provider_budgets=_parse_budgets(os.getenv("OMNIFORGE_PROVIDER_BUDGETS", "")),
             worker_mode=_bool("OMNIFORGE_WORKER_MODE", False),
+            broker_url=os.getenv("OMNIFORGE_BROKER_URL", ""),
+            worker_lease_seconds=_int("OMNIFORGE_WORKER_LEASE_SECONDS", 300),
+            tenant=os.getenv("OMNIFORGE_TENANT", ""),
+            otel=_bool("OMNIFORGE_OTEL", False),
+            oidc_issuer=os.getenv("OMNIFORGE_OIDC_ISSUER", ""),
+            oidc_client_id=os.getenv("OMNIFORGE_OIDC_CLIENT_ID", ""),
+            oidc_client_secret=os.getenv("OMNIFORGE_OIDC_CLIENT_SECRET", ""),
+            oidc_redirect_uri=os.getenv("OMNIFORGE_OIDC_REDIRECT_URI", ""),
             model_prices=_parse_prices(os.getenv("OMNIFORGE_MODEL_PRICES", "")),
             embedding_api_key=os.getenv("OMNIFORGE_EMBEDDING_API_KEY", "")
             or os.getenv("OPENAI_API_KEY", ""),
