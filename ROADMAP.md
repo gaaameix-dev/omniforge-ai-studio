@@ -6,7 +6,7 @@ credential is missing, the line says so.
 
 Legend: **I** implemented · **T** tested · **C** connected here · **P** partial · **N** pending
 
-Counts at this build: 356 automated tests · 83% line coverage · 51 shipped skills · 120 agent roles ·
+Counts at this build: 483 automated tests · 83% line coverage · 51 shipped skills · 120 agent roles ·
 15 built-in tools · 10 departments · 11 dashboard views.
 
 ---
@@ -56,6 +56,8 @@ Everything below was previously PENDING or PARTIAL and is now working and tested
 | **Unity / Unreal / Godot scaffolding** | I · T | `core/engines.py`, `/api/engines/scaffold` |
 | **Per-provider cost caps** | I · T | `PROVIDER_BUDGETS`, `/api/billing/providers` |
 | **Queue-backed workers** | I · T | `core/worker.py`, `omniforge worker`, lease claim |
+| **All 51 skills deterministic** | I · T | `skills/generators.py`; every skill works offline |
+| Generator/model switch | I · T | `OMNIFORGE_PREFER_GENERATORS` |
 | Alert rules (metric/threshold/cooldown) | I · T · C | `core/alerts.py`, `/api/alert-rules` |
 | Plugin registry index | I · T | `core/plugin_registry.py`, checksum verified |
 | LLM content classifier | I · T (needs key) | `LlmModerator`, off by default |
