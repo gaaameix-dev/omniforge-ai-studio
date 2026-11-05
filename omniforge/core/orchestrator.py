@@ -120,7 +120,7 @@ class Orchestrator:
     def describe(self) -> dict[str, Any]:
         return {
             "framework": "OmniForge AI Studio",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "backend": self.llm.name,
             "live_mode": self.settings.live_mode,
             "departments": [
@@ -651,6 +651,14 @@ class Orchestrator:
                 await self.bus.emit("run.timeout", run_id=run.id, payload={"error": run.error})
                 await self._skip_remaining(run, run.error)
                 return
+            cap = self._provider_cap_reason()
+            if cap:
+                run.error = cap
+                await self.bus.emit("budget.exceeded", run_id=run.id,
+                                    payload={"reason": cap, "provider": self.billing.provider_of(
+                                        getattr(self.settings, "llm_model", ""))})
+                await self._skip_remaining(run, cap)
+                return
             if budget.exceeded:
                 run.error = "token budget exceeded"
                 await self.bus.emit(
@@ -665,6 +673,44 @@ class Orchestrator:
             if any(result is False for result in results) and self.settings.fail_fast:
                 await self._skip_remaining(run, "run stopped after a failed task")
                 return
+
+    async def _judge_candidates(self, task: Task, candidates: list[str]) -> int | None:
+        """Ask the model which candidate is best. Returns a 0-based index or None."""
+        from .llm import parse_json_object
+
+        body = "\n\n".join(f"### Candidate {i + 1}\n{text[:3000]}"
+                            for i, text in enumerate(candidates))
+        prompt = (
+            f"Task: {task.title}\n\n{body}\n\n"
+            'Pick the best candidate. Reply JSON only: {"index": <1-based>, "reason": "..."}'
+        )
+        try:
+            response = await self.llm.complete(
+                "You judge work products. Be strict but fair.", prompt, json_mode=True
+            )
+        except Exception as exc:  # noqa: BLE001 - the review score is the fallback
+            log.debug("judge failed: %s", exc)
+            return None
+        data = parse_json_object(response.text) or {}
+        try:
+            index = int(data.get("index", 0)) - 1
+        except (TypeError, ValueError):
+            return None
+        if 0 <= index < len(candidates):
+            self.metrics.inc("debate.judged")
+            return index
+        return None
+
+    def _provider_cap_reason(self) -> str | None:
+        """Stop a run that is already in flight when the provider budget is gone."""
+        if self.billing is None:
+            return None
+        model = getattr(self.settings, "llm_model", "")
+        try:
+            self.billing.check_provider_budget(model)
+        except PermissionError as exc:
+            return str(exc)
+        return None
 
     async def _make_plan(self, run: Run) -> Plan:
         raw = await self.llm.plan(run.goal, self.catalog)
@@ -786,11 +832,19 @@ class Orchestrator:
                     )
                     results.append((candidate, review.score))
                 best_output, best_score = max(results, key=lambda item: item[1])
+                judge_note = "review score"
+                if (getattr(self.settings, "debate_judge", True) and len(results) > 1
+                        and getattr(self.llm, "name", "") != "mock"):
+                    picked = await self._judge_candidates(task, [out for out, _ in results])
+                    if picked is not None:
+                        best_output = results[picked][0]
+                        best_score = results[picked][1]
+                        judge_note = f"judge picked #{picked + 1}"
                 await self.bus.emit(
                     "task.debated", run_id=run.id, task_id=task.id,
                     payload={"title": task.title, "candidates": count,
                              "scores": [round(score, 3) for _, score in results],
-                             "chosen": round(best_score, 3)},
+                             "chosen": round(best_score, 3), "decided_by": judge_note},
                 )
                 self.metrics.observe("debate.candidates", count)
                 return best_output, best_score
@@ -955,6 +1009,13 @@ class Orchestrator:
         title = str(spec.get("title", "")).strip()
         if not title:
             return {"ok": False, "reason": "a delegated task needs a title"}
+        budget = self._budgets.get(run.id)
+        if budget is not None and budget.limit_tokens:
+            used = budget.tokens / max(1, budget.limit_tokens)
+            if used >= 0.9:
+                self.metrics.inc("delegations.rejected")
+                return {"ok": False,
+                        "reason": f"budget is {used:.0%} used; delegation refused"}
         if len(run.plan.tasks) >= self.settings.max_tasks_per_run:
             self.metrics.inc("delegations.rejected")
             return {"ok": False, "reason": f"task cap of {self.settings.max_tasks_per_run} reached"}
@@ -1042,10 +1103,15 @@ class Orchestrator:
         done = [t for t in run.plan.tasks if t.status is TaskStatus.DONE]
         failed = [t for t in run.plan.tasks if t.status is TaskStatus.FAILED]
         if done:
+            async def on_summary_token(delta: str) -> None:
+                await self.bus.emit("run.token", run_id=run.id,
+                                    payload={"agent": "synthesis", "delta": delta})
+
             try:
                 run.summary = await self.llm.synthesize(
                     run.goal,
                     [{"title": t.title, "department": t.department, "result": t.result or ""} for t in done],
+                    on_token=on_summary_token if getattr(self.settings, "stream_tokens", True) else None,
                 )
             except Exception as exc:  # noqa: BLE001
                 log.warning("synthesis failed: %s", exc)
