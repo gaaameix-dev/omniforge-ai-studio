@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.8.0
+
+Added
+- Native PostgreSQL store: `OMNIFORGE_DB_URL=postgresql://…` swaps the backend.
+  The PostgreSQL schema is generated from the SQLite one, so both stay in sync, and
+  a full run lifecycle (plan, tasks, checkpoints, memory, provenance, documents) is
+  verified against PostgreSQL 16.
+- Multi-agent debate: `OMNIFORGE_DEBATE_CANDIDATES` runs N candidates per task and
+  keeps the best reviewed one, with a `task.debated` event carrying the scores.
+- Image generation: `core/media.py` (OpenAI-compatible images endpoint), the
+  `image_generate` tool and `/api/media/image`; `/api/media` reports honestly which
+  modalities exist (images only).
+- Engine scaffolding: `core/engines.py` writes Unity, Unreal and Godot text project
+  skeletons, exposed as `/api/engines/scaffold` and the `engine_scaffold` tool.
+- Per-provider cost caps: `OMNIFORGE_PROVIDER_BUDGETS=openai:5,anthropic:10`, enforced
+  before a run starts, with `/api/billing/providers`.
+- Queue-backed workers: `OMNIFORGE_WORKER_MODE=true` enqueues runs, `omniforge worker`
+  claims them with a lease. Atomic claim, expired-lease requeue, several workers per
+  database, `/api/workers` status.
+- `FEATURES.md` rewritten as one consistent table set (the old file had stale
+  duplicate rows claiming finished work was missing).
+- Tests: 328 → 356.
+
+Changed
+- `runs` gained `lease_owner` / `lease_expires_at`; `RunStatus` gained `queued`.
+- Tie-break ordering uses `id` instead of SQLite-only `rowid`.
+
+Fixed
+- The SQLite schema now carries the columns that migrations added later, so a fresh
+  database and a migrated one have the same shape.
+
 ## 0.7.1 - audit pass
 
 Added
