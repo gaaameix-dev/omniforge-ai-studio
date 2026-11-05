@@ -154,6 +154,7 @@ CREATE TABLE IF NOT EXISTS schedules (
     at_hour      INTEGER,
     at_minute    INTEGER,
     goal         TEXT NOT NULL DEFAULT '',
+    job          TEXT NOT NULL DEFAULT 'run',
     workflow_id  TEXT,
     project_id   TEXT,
     enabled      INTEGER NOT NULL DEFAULT 1,
@@ -245,9 +246,19 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     target           TEXT,
     cooldown_seconds INTEGER NOT NULL DEFAULT 3600,
     team             TEXT,
+    severity         TEXT NOT NULL DEFAULT 'warning',
+    quiet_start      INTEGER,
+    quiet_end        INTEGER,
     enabled          INTEGER NOT NULL DEFAULT 1,
     last_fired_at    TEXT,
     created_at       TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS plugin_revocations (
+    name       TEXT NOT NULL,
+    version    TEXT NOT NULL,
+    reason     TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (name, version)
 );
 CREATE TABLE IF NOT EXISTS plugins (
     id           TEXT PRIMARY KEY,
@@ -984,13 +995,14 @@ class RunStore:
         with self._lock:
             self._conn.execute(
                 "INSERT INTO alert_rules (id, name, metric, comparator, threshold, channel, target, "
-                "cooldown_seconds, team, enabled, created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "cooldown_seconds, team, severity, quiet_start, quiet_end, enabled, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (data["id"], data["name"], data["metric"], data["comparator"],
                  float(data["threshold"]), data["channel"], data.get("target"),
                  (3600 if data.get("cooldown_seconds") is None
                   else int(data["cooldown_seconds"])),
-                 data.get("team"),
+                 data.get("team"), data.get("severity", "warning"),
+                 data.get("quiet_start"), data.get("quiet_end"),
                  int(data.get("enabled", 1)),
                  data["created_at"]),
             )
@@ -1017,6 +1029,30 @@ class RunStore:
         with self._lock:
             self._conn.execute("UPDATE alert_rules SET last_fired_at=? WHERE id=?", (ts, rule_id))
             self._conn.commit()
+
+    # ------------------------------------------------------------ revocations
+    def revoke_plugin(self, name: str, version: str, reason: str, ts: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO plugin_revocations (name, version, reason, created_at) "
+                "VALUES (?,?,?,?) ON CONFLICT(name, version) DO UPDATE SET reason=excluded.reason",
+                (name, version, reason, ts),
+            )
+            self._conn.commit()
+
+    def is_revoked(self, name: str, version: str) -> dict | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM plugin_revocations WHERE name=? AND version=?", (name, version)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_revocations(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM plugin_revocations ORDER BY created_at DESC"
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     # ------------------------------------------------------- settings & routes
     def set_setting(self, key: str, value: str, ts: str) -> None:
@@ -1342,12 +1378,13 @@ class RunStore:
         with self._lock:
             self._conn.execute(
                 "INSERT INTO schedules (id, name, kind, every_seconds, at_hour, at_minute, goal, "
-                "workflow_id, project_id, enabled, next_run_at, created_at, owner_id) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "job, workflow_id, project_id, enabled, next_run_at, created_at, owner_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     schedule_id, data["name"], data.get("kind", "interval"),
                     int(data.get("every_seconds") or 3600), data.get("at_hour"),
-                    data.get("at_minute"), data.get("goal", ""), data.get("workflow_id"),
+                    data.get("at_minute"), data.get("goal", ""), data.get("job", "run"),
+                    data.get("workflow_id"),
                     data.get("project_id"), int(data.get("enabled", 1)),
                     data.get("next_run_at"), data["created_at"], data.get("owner_id"),
                 ),
