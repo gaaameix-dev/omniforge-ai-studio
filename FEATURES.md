@@ -7,7 +7,7 @@ Legend: **Implemented** (code exists and runs) · **Tested** (covered by
 Single source of truth: `omniforge doctor`, `GET /api/integrations`,
 `GET /api/media` and `GET /api/db` report the same state at runtime.
 
-Numbers at this build: **356 tests**, 83% line coverage, 136 routes, 13 dashboard
+Numbers at this build: **483 tests**, 83% line coverage, 136 routes, 13 dashboard
 views, 126 i18n keys (en/hi), 5/5 eval cases.
 
 ## Core orchestration
@@ -37,7 +37,8 @@ views, 126 i18n keys (en/hi), 5/5 eval cases.
 | Feature | Implemented | Tested | Connected | Notes |
 |---|---|---|---|---|
 | 120 agent role templates | Yes | Yes | Yes | skills, tools, permissions, prompt |
-| 51 skills (9 deterministic handlers) | Yes | Yes | Yes | deterministic ones need no model |
+| 51 skills, all with deterministic implementations | Yes | Yes | Yes | `skills/generators.py`; no model needed for any skill |
+| Prompt path for custom skills | Yes | Yes | Needs key | `PREFER_GENERATORS=false` uses the model instead |
 | Modular skill registration | Yes | Yes | Yes | `skills.register(Skill(...))` |
 | Role-level permission grants | Yes | Yes | Yes | least privilege per role |
 | Custom roles from bundled skills | Yes | Yes | Yes | tested with "VR Game Engineer" |
@@ -137,6 +138,7 @@ views, 126 i18n keys (en/hi), 5/5 eval cases.
 | Per-team alert routing | Not built | rules are global with email/webhook channels |
 | Token-by-token streaming in the UI | Not built | the WebSocket streams events, not model tokens |
 | Single-task cancellation | Not built | a whole run can be cancelled; task-level cancel is open |
+| Expert-level prose from generators | Not built | generators produce structured first drafts (specs, tables, code skeletons), not domain-expert judgement |
 | Bulk knowledge import | Not built | documents are indexed per run; bulk import endpoint open |
 | Settings screen (DB-backed config) | Not built | configuration is environment-driven |
 | Docker image / PyPI release | Not published | build locally with `docker compose up --build`; publishing needs registry credentials |
