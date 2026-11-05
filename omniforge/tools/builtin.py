@@ -87,6 +87,43 @@ async def text_stats(text: str) -> str:
     })
 
 
+async def image_generate(prompt: str, run_id: str, name: str = "image.png",
+                         size: str = "1024x1024", data_dir: str = "./data",
+                         settings=None) -> str:
+    """Generate an image and write it into the run's artifacts."""
+    from ..core.media import ImageProvider
+
+    provider = ImageProvider(
+        getattr(settings, "media_api_key", ""),
+        model=getattr(settings, "media_model", "gpt-image-1"),
+        base_url=getattr(settings, "media_base_url", "https://api.openai.com/v1"),
+    )
+    payload = await provider.generate(prompt, size=size)
+    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in name)
+    if not safe.lower().endswith(".png"):
+        safe += ".png"
+    folder = Path(data_dir) / "artifacts" / run_id
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / safe
+    path.write_bytes(payload)
+    return f"{path} ({len(payload)} bytes)"
+
+
+async def engine_scaffold(engine: str, run_id: str, name: str = "MyGame", genre: str = "",
+                          notes: str = "", data_dir: str = "./data") -> str:
+    """Write an engine project skeleton into the run's artifacts."""
+    from ..core.engines import scaffold, summarise
+
+    files = scaffold(engine, name=name, genre=genre, notes=notes)
+    folder = Path(data_dir) / "artifacts" / run_id / f"{engine}_project"
+    for relative, content in files.items():
+        target = folder / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    summary = summarise(files)
+    return f"{folder} -> {summary['count']} files, {summary['bytes']} bytes"
+
+
 def build_default_tools(data_dir: str = "./data", settings=None):
     """Register the built-in tools. Code execution is opt-in via settings."""
     from ..core.registry import ToolRegistry
@@ -141,6 +178,32 @@ def build_default_tools(data_dir: str = "./data", settings=None):
         parameters={"text": "string"},
         returns="JSON string",
         category="data",
+    ))
+
+    if settings is not None and getattr(settings, "media_api_key", ""):
+        registry.register("image_generate", Tool(
+            name="image_generate",
+            description="Generate a raster image from a prompt and save it as an artifact.",
+            run=lambda prompt, run_id, name="image.png", size="1024x1024": image_generate(
+                prompt, run_id, name, size, data_dir, settings),
+            parameters={"prompt": "string", "run_id": "string", "name": "string",
+                        "size": "1024x1024 | 512x512"},
+            returns="path",
+            permissions=("media.generate",),
+            category="media",
+            requires_network=True,
+            provider="media",
+        ))
+    registry.register("engine_scaffold", Tool(
+        name="engine_scaffold",
+        description="Write a Unity/Unreal/Godot project skeleton into the run's artifacts.",
+        run=lambda engine, run_id, name="MyGame", genre="", notes="": engine_scaffold(
+            engine, run_id, name, genre, notes, data_dir),
+        parameters={"engine": "unity | unreal | godot", "run_id": "string", "name": "string",
+                    "genre": "string", "notes": "string"},
+        returns="path",
+        permissions=("fs.write",),
+        category="game",
     ))
 
     # GitHub write access and code execution are wired only when configured.
