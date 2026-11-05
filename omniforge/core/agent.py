@@ -92,6 +92,33 @@ class Agent:
             Event(type=type, run_id=run_id, task_id=task_id, agent_id=self.id, payload=payload)
         )
 
+    async def _complete(self, system: str, prompt: str, run, task):
+        """Call the model, streaming deltas as throttled events when enabled."""
+        if not getattr(self, "stream_tokens", True) or not hasattr(self.llm, "stream"):
+            return await self.llm.complete(system, prompt)
+
+        import time as _time
+
+        buffer: list[str] = []
+        state = {"last": 0.0}
+
+        async def on_token(delta: str) -> None:
+            buffer.append(delta)
+            now = _time.monotonic()
+            if now - state["last"] < 0.15 and sum(len(part) for part in buffer) < 120:
+                return
+            text = "".join(buffer)
+            buffer.clear()
+            state["last"] = now
+            await self._emit("agent.token", run.id, task.id, agent=self.template.name,
+                             delta=text)
+
+        response = await self.llm.stream(system, prompt, on_token)
+        if buffer:
+            await self._emit("agent.token", run.id, task.id, agent=self.template.name,
+                             delta="".join(buffer))
+        return response
+
     async def execute(
         self,
         task: Task,
@@ -130,7 +157,8 @@ class Agent:
             tokens = 0
         else:
             prompt = skill.render(task, context, run.goal, feedback)
-            resp = await self.llm.complete(self.template.system_prompt or skill.prompt_system, prompt)
+            system = self.template.system_prompt or skill.prompt_system
+            resp = await self._complete(system, prompt, run, task)
             output = (resp.text or "").strip()
             mode = f"llm:{resp.model}"
             tokens = resp.prompt_tokens + resp.completion_tokens
