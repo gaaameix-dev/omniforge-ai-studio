@@ -1,7 +1,7 @@
 # OmniForge AI Studio
 
 [![ci](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/gaaameix-dev/omniforge-ai-studio/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-328-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-356-brightgreen)](tests/)
 [![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -46,7 +46,7 @@ omniforge eval                # 5 end-to-end eval cases
 omniforge demo                # two goals, printed plan by plan
 omniforge serve               # dashboard + API on http://127.0.0.1:8000
 omniforge run "Build a 2D mobile puzzle game with 20 levels and a leaderboard"
-pytest -q                     # 328 tests, ~2m40s
+pytest -q                     # 356 tests, ~3m
 ```
 
 Live model (any OpenAI-compatible endpoint: OpenAI, Azure, Groq, Together,
@@ -114,6 +114,16 @@ tool should.
 | PostgreSQL mirror | `omniforge db --sync postgresql://…` copies runs, tasks, events, documents, usage, audit and tool calls into PostgreSQL for SQL reporting; verified against PostgreSQL 16 |
 | Workspace editor | dashboard Workspace view: upload, edit and save project files, then run Python in the sandbox |
 | Workflow builder | dashboard Builder view: compose tasks, departments, dependencies and conditions, then save as a reusable workflow |
+
+## Scale-out and generation
+
+| Piece | How it works |
+|---|---|
+| PostgreSQL backend | `OMNIFORGE_DB_URL=postgresql://…` switches the store; the schema is generated from the SQLite one, verified against PostgreSQL 16 |
+| Queue mode | `OMNIFORGE_WORKER_MODE=true` enqueues runs; `omniforge worker` claims them with a lease. Several workers can share one database - the claim is one atomic UPDATE, expired leases are requeued |
+| Debate | `OMNIFORGE_DEBATE_CANDIDATES=3` runs several candidates per task and keeps the best reviewed one |
+| Image generation | `OMNIFORGE_MEDIA_API_KEY` enables the `image_generate` tool and `/api/media/image` |
+| Engine scaffolding | `/api/engines/scaffold` writes a Unity, Unreal or Godot text project skeleton (no compile) |
 
 ## Models, cost and quotas
 
@@ -200,7 +210,8 @@ Mobile-first, zero build step, English/Hindi toggle, nine views:
 | `omniforge plugins [--install|--enable|--disable|--remove]` | plugin packages |
 | `omniforge vault [--rotate NEW_KEY]` | vault status or key rotation |
 | `omniforge loadtest --runs N --concurrency C` | latency and throughput report |
-| `omniforge db [--sync URL] [--verify URL]` | SQLite status, Postgres mirror, verification |
+| `omniforge db [--sync URL] [--verify URL]` | database status, Postgres mirror, verification |
+| `omniforge worker [--once] [--max-runs N]` | process queued runs (queue mode) |
 | `omniforge alerts [--create ...] [--delete ID]` | alert rules |
 | `omniforge agents / skills / departments / info / demo` | inspect the framework |
 
@@ -238,6 +249,9 @@ Auth off unless `OMNIFORGE_API_KEY` is set; then `/api/*` needs
 | GET/POST | `/api/sandbox` · `/api/sandbox/run` | sandbox status · run a snippet |
 | PATCH | `/api/files/{id}` | editor save |
 | GET/POST | `/api/plugins/registry` · `/api/plugins/registry/install` | registry index · install |
+| GET/POST | `/api/media` · `/api/media/image` | media capability · generate an image |
+| GET/POST | `/api/engines` · `/api/engines/scaffold` | engines · project skeleton |
+| GET | `/api/workers` · `/api/billing/providers` | queue state · per-provider spend |
 | GET | `/api/knowledge/search?mode=semantic` | hybrid retrieval (needs an embedding key) |
 | GET/POST | `/api/runs/{id}/checkpoint` · `/resume` | checkpoint · crash recovery |
 | GET | `/api/health` · `/api/framework` · `/api/stats` | liveness · catalogues+policy · counters |
@@ -287,6 +301,11 @@ curl -s localhost:8000/api/runs -H 'content-type: application/json' \
 | `OMNIFORGE_DB_URL` | empty (SQLite) | database backend |
 | `OMNIFORGE_PLUGIN_REQUIRE_SIGNATURE` | `false` | signed plugins only |
 | `OMNIFORGE_MODERATION_LLM` | `false` | add a model-based content classifier |
+| `OMNIFORGE_DB_URL` | empty (SQLite) | `sqlite:///path` or `postgresql://…` |
+| `OMNIFORGE_WORKER_MODE` | `false` | enqueue runs instead of running them inline |
+| `OMNIFORGE_DEBATE_CANDIDATES` | `1` | candidates per task (debate) |
+| `OMNIFORGE_MEDIA_API_KEY` · `_MEDIA_MODEL` | empty · `gpt-image-1` | image generation |
+| `OMNIFORGE_PROVIDER_BUDGETS` | empty | `openai:5,anthropic:10` USD per month |
 | `ANTHROPIC_API_KEY` · `GEMINI_API_KEY` · `OMNIFORGE_LLM_PROVIDER` · `_LLM_FALLBACK` | empty · empty · `openai` · empty | providers |
 | `OMNIFORGE_RATE_LIMIT_PER_MINUTE` · `_BURST` · `_ALLOW_ANONYMOUS` | `240` · `60` · `false` | rate limits · guest reads |
 | `OMNIFORGE_API_KEY` · `_CORS_ORIGINS` | empty | single-key auth · CORS |
@@ -321,7 +340,7 @@ omniforge/
          guard (injection defence) · sandbox · integrations · auth · vault
          ratelimit · backup · mailer · mfa · scheduler · notifier · billing
          plugins · plugin_registry · portable · uploads · moderation · gateway
-         alerts · pgmirror · loadtest
+         alerts · pgmirror · loadtest · media · engines · worker · store_pg
   skills/ base · library (51) · handlers (9 deterministic)
   agents/ departments (10) · roles (120 + permissions)
   tools/  builtin · github · code · mcp (stdio + http)
@@ -331,7 +350,7 @@ omniforge/
           content_routes · platform_routes
   cli.py
 web/index.html           dashboard v3 (mobile-first)
-tests/                   328 tests
+tests/                   356 tests
 docs/ARCHITECTURE.md     layers, invariants, state machine, extension points
 docs/SECURITY.md         operator security checklist
 docs/TROUBLESHOOTING.md  setup and failure playbook
@@ -343,7 +362,7 @@ ROADMAP.md               item-by-item status for both production addenda
 ## Testing and evals
 
 ```bash
-pytest -q          # 328 tests
+pytest -q          # 356 tests
 omniforge eval     # 5 goal-level cases with explicit checks
 ruff check .       # lint
 ```
