@@ -1,9 +1,10 @@
 """Billing, usage and the plugin registry."""
 from __future__ import annotations
 
+import json
 from typing import Any
 
-from fastapi import File, HTTPException, Request, UploadFile
+from fastapi import File, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from ..core import auth
@@ -34,6 +35,25 @@ class AlertRuleRequest(BaseModel):
 
 class DbSyncRequest(BaseModel):
     url: str = Field(min_length=8, max_length=500)
+
+
+class SettingsPatch(BaseModel):
+    values: dict[str, Any]
+
+
+class AlertRouteRequest(BaseModel):
+    team: str = Field(min_length=2, max_length=80)
+    channel: str
+    target: str = Field(min_length=3, max_length=300)
+
+
+# runtime-tunable settings; anything not listed stays environment-only
+TUNABLE = {
+    "llm_model": str, "debate_candidates": int, "prefer_generators": bool,
+    "stream_tokens": bool, "review_enabled": bool, "max_parallel": int,
+    "budget_tokens": int, "require_approval": bool, "moderation_enabled": bool,
+    "alert_email": str, "worker_mode": bool,
+}
 
 
 class EstimateRequest(BaseModel):
@@ -279,6 +299,90 @@ def register(app, *, orch) -> None:
             raise HTTPException(status_code=400, detail=str(exc)) from None
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=str(exc)) from None
+
+    # ------------------------------------------------------------ settings
+    @app.get("/api/settings")
+    async def get_settings(request: Request) -> dict:
+        _require(_identity(request), "read")
+        current = settings()
+        return {
+            "tunable": sorted(TUNABLE),
+            "values": {key: getattr(current, key, None) for key in TUNABLE},
+            "overrides": store().get_settings(),
+            "note": "overrides win over environment variables and apply immediately",
+        }
+
+    @app.patch("/api/settings")
+    async def patch_settings(req: SettingsPatch, request: Request) -> dict:
+        identity = _identity(request)
+        _require(identity, "manage")
+        unknown = [key for key in req.values if key not in TUNABLE]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"not tunable: {unknown}")
+        applied: dict[str, Any] = {}
+        for key, raw in req.values.items():
+            cast = TUNABLE[key]
+            try:
+                value = cast(raw) if cast is not bool else bool(raw)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"bad value for {key}") from None
+            setattr(settings(), key, value)
+            store().set_setting(key, json.dumps(value), auth.utcnow())
+            applied[key] = value
+        # the orchestrator shares the settings object, so the change is live
+        if getattr(app.state, "orchestrator", None) is not None:
+            app.state.orchestrator.settings = settings()
+        store().add_audit(identity.email, "settings.updated", None, json.dumps(applied), None,
+                          auth.utcnow())
+        return {"applied": applied}
+
+    @app.delete("/api/settings/{key}")
+    async def reset_setting(key: str, request: Request) -> dict:
+        identity = _identity(request)
+        _require(identity, "manage")
+        removed = store().delete_setting(key)
+        return {"removed": removed, "note": "restart to pick the environment value back up"}
+
+    # -------------------------------------------------------- alert routes
+    @app.get("/api/alert-routes")
+    async def list_alert_routes(request: Request) -> dict:
+        _require(_identity(request), "read")
+        return {"routes": store().list_alert_routes()}
+
+    @app.post("/api/alert-routes", status_code=201)
+    async def set_alert_route(req: AlertRouteRequest, request: Request) -> dict:
+        identity = _identity(request)
+        _require(identity, "manage")
+        if req.channel not in ("email", "webhook"):
+            raise HTTPException(status_code=400, detail="channel must be email or webhook")
+        store().set_alert_route(req.team, req.channel, req.target, auth.utcnow())
+        store().add_audit(identity.email, "alert_route.set", req.team, req.target, None,
+                          auth.utcnow())
+        return {"team": req.team, "channel": req.channel, "target": req.target}
+
+    @app.delete("/api/alert-routes/{team}")
+    async def delete_alert_route(team: str, request: Request) -> dict:
+        identity = _identity(request)
+        _require(identity, "manage")
+        return {"removed": store().delete_alert_route(team)}
+
+    # ------------------------------------------------------- marketplace
+    @app.get("/api/plugins/index")
+    async def plugin_index(request: Request, base_url: str = "") -> dict:
+        _require(_identity(request), "read")
+        return plugin_core.build_index(store(), settings().data_dir, settings(),
+                                       base_url=base_url)
+
+    @app.get("/api/plugins/{plugin_id}/export")
+    async def plugin_export(plugin_id: str, request: Request) -> Response:
+        _require(_identity(request), "read")
+        try:
+            payload = plugin_core.export_package(store(), settings().data_dir, plugin_id)
+        except plugin_core.PluginError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        return Response(content=payload, media_type="application/zip",
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="{plugin_id}.zip"'})
 
     # ---------------------------------------------------------- model status
     @app.get("/api/models")
